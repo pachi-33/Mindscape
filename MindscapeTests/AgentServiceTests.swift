@@ -150,7 +150,9 @@ final class AgentServiceTests: XCTestCase {
             let batched = service.handle(request("POST", "/v1/maps/\(mapID)/batch", ["operations": operations]))
             XCTAssertEqual(batched.status, 200)
         }
-        XCTAssertLessThan(Date().timeIntervalSince(start), 2.0, "1000 个节点应在 2 秒内完成")
+        // 共享 CI 运行器的磁盘和 CPU 速度波动较大，本机保留更严格的性能目标。
+        let timeLimit: TimeInterval = ProcessInfo.processInfo.environment["CI"] == "true" ? 10 : 2
+        XCTAssertLessThan(Date().timeIntervalSince(start), timeLimit, "1000 个节点应在 \(timeLimit) 秒内完成")
 
         let body = try object(service.handle(request("GET", "/v1/maps/\(mapID)")))
         let batchData = body["data"] as? [String: Any]
