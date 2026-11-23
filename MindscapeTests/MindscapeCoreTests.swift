@@ -994,8 +994,11 @@ extension MindscapeFeatureTests {
             selectedRange: NSRange(location: 2, length: 0),
             replacementRange: NSRange(location: NSNotFound, length: 0)
         )
-        // 同步是延后一拍的
-        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        // 同步是异步的，等待模型实际更新，避免共享运行器上固定延时产生误报。
+        let didSync = expectation(for: NSPredicate { _, _ in
+            editor.map.node(child.id)?.text.contains("zc") == true
+        }, evaluatedWith: nil)
+        wait(for: [didSync], timeout: 5)
 
         XCTAssertTrue(
             editor.map.node(child.id)?.text.contains("zc") == true,
@@ -1045,8 +1048,11 @@ extension MindscapeFeatureTests {
         XCTAssertLessThan(used.height, lineHeight, "组字时这一帧就折行了")
         XCTAssertGreaterThanOrEqual(container.containerSize.width, used.width, "容器宽度没跟上组字")
 
-        // 模型同步是延后一拍的
-        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        // 模型同步是异步的，等待实际结果而不是依赖固定延时。
+        let didSync = expectation(for: NSPredicate { _, _ in
+            editor.map.node(child.id)?.text.contains(composing) == true
+        }, evaluatedWith: nil)
+        wait(for: [didSync], timeout: 5)
         manager.ensureLayout(for: container)
         used = manager.usedRect(for: container)
         XCTAssertLessThan(used.height, lineHeight, "组字同步后又折行了")
