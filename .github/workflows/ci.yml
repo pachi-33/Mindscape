@@ -32,8 +32,8 @@ jobs:
         run: npx --yes @fission-ai/openspec@2.1.1 validate --all --strict --no-interactive
 
   macos:
-    name: macOS build and tests
-    runs-on: macos-15
+    name: macOS build and tests (Intel)
+    runs-on: macos-15-intel
     timeout-minutes: 30
     env:
       HOMEBREW_NO_AUTO_UPDATE: '1'
