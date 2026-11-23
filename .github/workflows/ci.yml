@@ -58,6 +58,8 @@ jobs:
             -scheme Mindscape \
             -configuration Debug \
             -destination 'platform=macOS' \
+            -testLanguage zh-Hans \
+            -testRegion CN \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/MindscapeTests.xcresult" \
             -parallel-testing-enabled NO \
