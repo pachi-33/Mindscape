@@ -12,6 +12,7 @@ struct MapCanvasRepresentable: NSViewRepresentable {
     var focusDimAlpha: CGFloat = 0.35
     /// 用户在画布上开始点击 / 输入时回调，用于收起新手提示
     var onUserInteraction: (() -> Void)?
+    var onCanvasAttached: ((MindCanvasView) -> Void)?
 
     func makeNSView(context: Context) -> MindCanvasView {
         let view = MindCanvasView(frame: .zero)
@@ -43,10 +44,12 @@ struct MapCanvasRepresentable: NSViewRepresentable {
             bridge.zoom = zoom
         }
         bridge.attachCanvas(view)
+        onCanvasAttached?(view)
     }
 }
 
 struct WorkspaceView: View {
+    @Environment(AppModel.self) private var app
     @Bindable var editor: MapEditor
     /// 全局只自动展开一次：有数据的用户首次打开导图、无数据用户首次新建导图时触发
     private let tipsGate = CanvasTipsGate()
@@ -166,10 +169,14 @@ struct WorkspaceView: View {
             revision: editor.revision,
             themeID: editor.theme.id,
             bridge: canvasBridge,
+            readOnly: app.updates.isPreparingApplication,
             searchMatches: Set(matches),
             activeSearchID: activeMatchID,
             onUserInteraction: {
                 if showTips { showTips = false }
+            },
+            onCanvasAttached: { canvas in
+                app.activeCanvas = canvas
             }
         )
         .background(Color(nsColor: editor.theme.background))

@@ -2714,6 +2714,14 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
         }
     }
 
+    func commitEditingForUpdate() throws {
+        guard editingID == nil || editTextView != nil else { throw UpdateError.cannotCommitEditing }
+        if editTextView?.hasMarkedText() == true {
+            editTextView?.unmarkText()
+        }
+        commitEditing()
+    }
+
     func commitEditing() {
         guard let textView = editTextView, let id = editingID else { return }
         let text = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)

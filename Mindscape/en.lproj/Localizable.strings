@@ -431,6 +431,17 @@
 "打开后可选择保存并退出 Mindscape，避免拖动覆盖时被系统拦截" = "You can save and quit Mindscape first so macOS doesn't block the replacement.";
 "无法打开安装包，请到 Finder 中手动打开下载的文件。" = "Couldn't open the installer. Open the downloaded file from Finder instead.";
 "更新失败" = "Update Failed";
+"暂无可用更新" = "No updates available";
+"重新检查" = "Check Again";
+"当前版本：%@" = "Current version: %@";
+"更新完成后，Mindscape 会自动重新打开。" = "Mindscape will reopen after the update.";
+"查看更新说明并在应用内安装" = "Review what's new and install within the app";
+"正在验证更新…" = "Verifying Update…";
+"正在安装并重启…" = "Installing and Restarting…";
+"此构建未配置更新公钥。请从发布页安装可更新的版本。" = "This build has no update verification key. Install an updatable version from the releases page.";
+"无法保存当前编辑。请先完成编辑，再重试更新。" = "Couldn't save the current edit. Finish editing and try updating again.";
+"当前文稿库只在内存中。请先将导图导出或保存到磁盘，再重试更新。" = "This library is in memory only. Export or save your maps to disk before updating.";
+"无法保存导图：%@。请检查文稿库后重试。" = "Couldn't save the map: %@. Check the library and try again.";
 "打开发布页" = "Open Releases Page";
 "这个版本没有附带更新说明，可以打开发布页查看。" = "This release has no notes. Open the releases page for details.";
 "下载文件校验失败，已删除，请重新下载。" = "Checksum mismatch. The download was deleted; please try again.";

@@ -1302,15 +1302,19 @@ final class MapEditor {
     }
 
     func saveNow() {
-        saveTask?.cancel()
-        saveTask = nil
         do {
-            try store.save(map)
-            maybeAutoSnapshot()
-            onSaved?()
+            try saveImmediately()
         } catch {
             // 自动保存失败时不打断编辑；下一次编辑会再次尝试。
         }
+    }
+
+    func saveImmediately() throws {
+        saveTask?.cancel()
+        saveTask = nil
+        try store.save(map)
+        maybeAutoSnapshot()
+        onSaved?()
     }
 
     private func maybeAutoSnapshot() {

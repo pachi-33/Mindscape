@@ -81,7 +81,7 @@ Sample data. Some screenshots were taken on earlier 0.5.x builds; shortcuts and 
 - **Good-looking out of the box.** 8 themes and 8 layouts. You don't have to style anything.
 - **Actually organized.** Nested folders, an outline panel, full-map search, focus mode, favorites, and a trash can.
 - **Easy to leave.** Export to PNG, PDF, Markdown, OPML, and JSON; import Markdown, OPML, and JSON.
-- **Quiet updates.** No automatic network access by default; the update question appears once, and downloads are verified with SHA-256.
+- **Quiet updates.** No automatic network access by default; the update question appears once, and updates are verified before installation.
 
 ---
 
@@ -149,8 +149,7 @@ Always-available menu bar item: open the app, quick new map, new from template, 
 
 - Check manually under Settings → About or from the menu bar's “Check for Updates…”
 - The first launch asks whether to check automatically and whether to install the agent skill (both off by default); change them later in Settings
-- The update window shows release notes and download size; the DMG is verified with SHA-256 before it opens
-- If the GitHub API is rate-limited, the app falls back to the Releases Atom feed and then a 302 redirect; network and verification run off the main thread
+- Choose **Update** to verify the archive, save the current map, install, and reopen the app. Older versions require a one-time manual install from the [Mindscape releases page](https://github.com/pachi-33/Mindscape/releases). See [release instructions](docs/releasing.md).
 
 ---
 
@@ -158,15 +157,7 @@ Always-available menu bar item: open the app, quick new map, new from template, 
 
 ### Download
 
-Download [`Mindscape-0.7.0.dmg`](https://github.com/jiuxianzai/Mindscape/releases/download/v0.7.0/Mindscape-0.7.0.dmg), open it, and drag Mindscape into Applications.
-
-This build is **ad-hoc signed and not notarized**. If Gatekeeper blocks the first launch, run:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Mindscape.app
-```
-
-Proper Developer ID signing and notarization are on the roadmap.
+Download a distribution DMG from the [Mindscape releases page](https://github.com/pachi-33/Mindscape/releases), open it, and drag Mindscape into Applications. See the [release instructions](docs/releasing.md) for the one-time migration and signing requirements.
 
 ### Build from source
 
@@ -184,7 +175,7 @@ Packaging and local install:
 
 ```bash
 make package    # writes dist/Mindscape-0.7.0.dmg, .zip, and .dmg.sha256
-make publish    # creates the GitHub Release via gh (requires gh auth login)
+make publish    # signs, notarizes, and publishes through GitHub CLI (see docs/releasing.md)
 make install    # installs to /Applications and launches
 ```
 

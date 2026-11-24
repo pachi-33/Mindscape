@@ -15,8 +15,8 @@ struct AppCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .appInfo) {
             Button("检查更新…") {
-                UpdateWindowController.shared.show(checker: app.updates, app: app)
-                Task { await app.updates.check(manual: true) }
+                UpdateWindowController.shared.show(checker: app.updates)
+                app.updates.check(manual: true)
             }
 
             Button("AI Agent 接入…") {
@@ -29,11 +29,13 @@ struct AppCommands: Commands {
             Button("新建导图") {
                 app.createDocument(template: .blank)
             }
+            .disabled(app.updates.isPreparingApplication)
             .appShortcut(shortcuts.combo(for: .newDocument))
 
             Button("导入 Markdown / OPML…") {
                 app.importDocument()
             }
+            .disabled(app.updates.isPreparingApplication)
             .appShortcut(shortcuts.combo(for: .importDocument))
         }
 
@@ -41,11 +43,13 @@ struct AppCommands: Commands {
             Button("撤销") {
                 app.editor?.undo()
             }
+            .disabled(app.updates.isPreparingApplication)
             .appShortcut(shortcuts.combo(for: .undo))
 
             Button("重做") {
                 app.editor?.redo()
             }
+            .disabled(app.updates.isPreparingApplication)
             .appShortcut(shortcuts.combo(for: .redo))
 
             Divider()
@@ -58,6 +62,7 @@ struct AppCommands: Commands {
             Button("创建副本") {
                 app.editor?.duplicateSelection()
             }
+            .disabled(app.updates.isPreparingApplication)
             .appShortcut(shortcuts.combo(for: .duplicateNode))
         }
 
@@ -109,11 +114,13 @@ struct AppCommands: Commands {
             Button("折叠全部子分支") {
                 app.editor?.collapseAll()
             }
+            .disabled(app.updates.isPreparingApplication)
             .appShortcut(shortcuts.combo(for: .collapseAll))
 
             Button("展开全部") {
                 app.editor?.expandAll()
             }
+            .disabled(app.updates.isPreparingApplication)
             .appShortcut(shortcuts.combo(for: .expandAll))
 
             Divider()
