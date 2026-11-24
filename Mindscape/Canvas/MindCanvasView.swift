@@ -62,6 +62,7 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
     private var drag: DragState?
     private var dragOffset: CGSize = .zero
     private var dropTargetID: UUID?
+    private(set) var siblingInsertionLine: CGRect?
     /// 拖动思维导图节点时，整棵被拖子树模拟出的落点虚线框（世界坐标）
     private(set) var dropPreviewFrames: [UUID: CGRect] = [:]
     private var dropPreviewSourceID: UUID?
@@ -92,6 +93,17 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
         let target: UUID
         let after: Bool
         let side: MindMapSide?
+    }
+
+    private struct SiblingInsertion {
+        let target: UUID
+        let after: Bool
+        let line: CGRect
+    }
+
+    private enum MindMapDragDestination {
+        case node(UUID)
+        case insertion(SiblingInsertion)
     }
 
     private enum DragState {
@@ -678,6 +690,10 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
         drawSnapGuides(in: context)
         context.restoreGState()
         drawMindMapDropPreview()
+        if let siblingInsertionLine {
+            theme.accent.setFill()
+            NSBezierPath(roundedRect: worldRectToView(siblingInsertionLine), xRadius: 1, yRadius: 1).fill()
+        }
         drawMarquee()
     }
 
@@ -890,6 +906,79 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
         guard let layout = hitTestLayout else { return nil }
         for id in layout.drawOrder.reversed() where !ids.contains(id) {
             if layout.frames[id]?.contains(worldPoint) == true { return id }
+        }
+        return nil
+    }
+
+    private func mindMapDragDestination(at point: CGPoint, ids: Set<UUID>) -> MindMapDragDestination? {
+        if let (source, parent) = mindMapInsertionSource(ids),
+           let layout = hitTestLayout {
+            if let target = hitTest(worldPoint: point, excluding: ids) {
+                // 节点本体仍按原规则处理。
+                if canDrop(ids, on: target) { return .node(target) }
+            } else {
+                if let insertion = siblingInsertion(at: point, under: parent, excluding: source, layout: layout) {
+                    return .insertion(insertion)
+                }
+                // 其他父节点的插入区域不能经由磁吸变成迁移落点。
+                for otherParent in layout.children.keys where otherParent != parent {
+                    if siblingInsertion(at: point, under: otherParent, excluding: source, layout: layout) != nil {
+                        return nil
+                    }
+                }
+            }
+        }
+        return mindMapDropTarget(worldPoint: point, excluding: ids).map(MindMapDragDestination.node)
+    }
+
+    private func mindMapInsertionSource(_ ids: Set<UUID>) -> (source: UUID, parent: UUID)? {
+        guard ids.count == 1, let source = ids.first,
+              let parent = editor?.map.node(source)?.parentID else { return nil }
+        return (source, parent)
+    }
+
+    private func siblingInsertion(
+        at point: CGPoint,
+        under parent: UUID,
+        excluding source: UUID,
+        layout: LayoutResult
+    ) -> SiblingInsertion? {
+        guard let parentFrame = layout.frames[parent],
+              let children = layout.children[parent] else { return nil }
+        let zoom = max(camera.zoom, CanvasCamera.minZoom)
+        let endPadding = 24 / zoom
+        let sidePadding = 10 / zoom
+        let lineThickness = 2 / zoom
+        let isLeft = point.x < parentFrame.midX
+        let column = children.compactMap { id -> (id: UUID, frame: CGRect)? in
+            guard id != source, let frame = layout.frames[id],
+                  (frame.midX < parentFrame.midX) == isLeft else { return nil }
+            return (id, frame)
+        }
+        guard let first = column.first, let last = column.last else { return nil }
+
+        func line(at y: CGFloat, across frame: CGRect) -> CGRect {
+            CGRect(x: frame.minX, y: y - lineThickness / 2, width: frame.width, height: lineThickness)
+        }
+
+        if point.y < first.frame.minY {
+            let zone = first.frame.insetBy(dx: -sidePadding, dy: -endPadding)
+            guard zone.contains(point) else { return nil }
+            return SiblingInsertion(target: first.id, after: false,
+                                    line: line(at: first.frame.minY - 6 / zoom, across: first.frame))
+        }
+        if point.y >= last.frame.maxY {
+            let zone = last.frame.insetBy(dx: -sidePadding, dy: -endPadding)
+            guard zone.contains(point) else { return nil }
+            return SiblingInsertion(target: last.id, after: true,
+                                    line: line(at: last.frame.maxY + 6 / zoom, across: last.frame))
+        }
+        for (above, below) in zip(column, column.dropFirst()) {
+            guard point.y >= above.frame.maxY, point.y < below.frame.minY else { continue }
+            let span = above.frame.union(below.frame)
+            guard point.x >= span.minX - sidePadding, point.x <= span.maxX + sidePadding else { return nil }
+            return SiblingInsertion(target: below.id, after: false,
+                                    line: line(at: (above.frame.maxY + below.frame.minY) / 2, across: span))
         }
         return nil
     }
@@ -1271,12 +1360,25 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
                 }
             } else {
                 let world = viewToWorld(point)
-                let target = editor?.map.layout == .mindMap
-                    ? mindMapDropTarget(worldPoint: world, excluding: ids)
-                    : hitTest(worldPoint: world, excluding: ids)
-                let validTarget = target.flatMap { canDrop(ids, on: $0) ? $0 : nil }
-                dropTargetID = validTarget
-                updateMindMapDropPreview(ids: ids, target: validTarget, world: world)
+                if editor?.map.layout == .mindMap {
+                    switch mindMapDragDestination(at: world, ids: ids) {
+                    case .insertion(let insertion):
+                        dropTargetID = nil
+                        clearMindMapDropPreview()
+                        siblingInsertionLine = insertion.line
+                    case .node(let target):
+                        siblingInsertionLine = nil
+                        dropTargetID = target
+                        updateMindMapDropPreview(ids: ids, target: target, world: world)
+                    case nil:
+                        dropTargetID = nil
+                        clearMindMapDropPreview()
+                    }
+                } else {
+                    let target = hitTest(worldPoint: world, excluding: ids)
+                    dropTargetID = target.flatMap { canDrop(ids, on: $0) ? $0 : nil }
+                    clearMindMapDropPreview()
+                }
             }
             dragOffset = offset
             needsDisplay = true
@@ -1331,9 +1433,8 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
         event: NSEvent
     ) {
         let offset = dragOffset
-        let target = dropTargetID
+        var target = dropTargetID
         let moved = abs(offset.width) > 1 || abs(offset.height) > 1
-        dropTargetID = nil
         stopDashTimer()
 
         guard moved else {
@@ -1370,13 +1471,33 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
             return
         }
 
-        guard let target, let editor else {
+        guard let editor else {
             snapBack(from: visualStart)
             return
         }
 
         let point = convert(event.locationInWindow, from: nil)
         let world = viewToWorld(point)
+        if editor.map.layout == .mindMap, let (source, _) = mindMapInsertionSource(ids) {
+            switch mindMapDragDestination(at: world, ids: ids) {
+            case .insertion(let insertion):
+                let side = editor.map.resolvedMindMapLayoutMode == .remember
+                    ? mindMapSide(of: insertion.target) : nil
+                editor.reorder(id: source, relativeTo: insertion.target, after: insertion.after, branchSide: side)
+                rebuildLayoutIfNeeded(force: true)
+                endNodeDrag()
+                animateFrames(from: visualStart, to: layoutResult?.frames ?? [:], duration: 0.24)
+                return
+            case .node(let node):
+                target = node
+            case nil:
+                target = nil
+            }
+        }
+        guard let target else {
+            snapBack(from: visualStart)
+            return
+        }
         let targetFrame = layoutResult?.frames[target] ?? .zero
         let relativeY = targetFrame.height > 0
             ? (world.y - targetFrame.minY) / targetFrame.height
@@ -1538,6 +1659,7 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
     }
 
     private func clearMindMapDropPreview() {
+        siblingInsertionLine = nil
         dropPreviewKey = nil
         dropPreviewSourceID = nil
         dropPreviewParentID = nil

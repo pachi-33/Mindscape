@@ -2377,6 +2377,125 @@ extension MindscapeFeatureTests {
         )
     }
 
+    func testMindMapDragInsertsBetweenSiblingsAndAtBothEnds() throws {
+        let examples: [(source: Int, slot: Int, expected: [Int])] = [
+            (3, 0, [3, 0, 1, 2]),
+            (3, 1, [0, 3, 1, 2]),
+            (0, 4, [1, 2, 3, 0])
+        ]
+        for example in examples {
+            let (editor, canvas, window, sourceParent, _) = try makeSiblingInsertionCanvas()
+            let nodes = editor.map.children(of: sourceParent)
+            let originalOrder = nodes.map(\.id)
+            let source = nodes[example.source]
+            let subtree = editor.map.subtreeIDs(of: source.id)
+            XCTAssertGreaterThan(subtree.count, 1)
+            let frames = LayoutEngine.layout(editor.map).frames
+            let column = try nodes.map { try XCTUnwrap(frames[$0.id]) }
+            let point = siblingSlot(example.slot, in: column)
+            XCTAssertFalse(frames.values.contains { $0.contains(point) })
+            let start = canvas.convert(canvas.worldToView(column[example.source].center), to: nil)
+            let end = canvas.convert(canvas.worldToView(point), to: nil)
+
+            canvas.mouseDown(with: try XCTUnwrap(mouseEvent(.leftMouseDown, at: start, in: window)))
+            canvas.mouseDragged(with: try XCTUnwrap(mouseEvent(.leftMouseDragged, at: end, in: window)))
+            let line = try XCTUnwrap(canvas.siblingInsertionLine)
+            XCTAssertFalse(column.contains { $0.intersects(line) })
+            XCTAssertEqual(line.midY, point.y, accuracy: 0.01)
+            XCTAssertEqual(editor.map.children(of: sourceParent).map(\.id), originalOrder)
+            canvas.mouseUp(with: try XCTUnwrap(mouseEvent(.leftMouseUp, at: end, in: window)))
+
+            let expected = example.expected.map { originalOrder[$0] }
+            XCTAssertNil(canvas.siblingInsertionLine)
+            XCTAssertEqual(editor.map.children(of: sourceParent).map(\.id), expected)
+            XCTAssertEqual(editor.map.subtreeIDs(of: source.id), subtree)
+            XCTAssertEqual(editor.map.node(source.id)?.parentID, sourceParent)
+            editor.undo()
+            XCTAssertEqual(editor.map.children(of: sourceParent).map(\.id), originalOrder)
+            editor.redo()
+            XCTAssertEqual(editor.map.children(of: sourceParent).map(\.id), expected)
+        }
+    }
+
+    func testMindMapSiblingInsertionRechecksReleasePosition() throws {
+        enum Release: CaseIterable { case aboveFirst, betweenOtherSiblings, belowOtherSiblings, emptyCanvas }
+        for release in Release.allCases {
+            let (editor, canvas, window, sourceParent, otherParent) = try makeSiblingInsertionCanvas()
+            let siblings = editor.map.children(of: sourceParent).map(\.id)
+            let otherSiblings = editor.map.children(of: otherParent).map(\.id)
+            let frames = LayoutEngine.layout(editor.map).frames
+            let column = try siblings.map { try XCTUnwrap(frames[$0]) }
+            let otherColumn = try otherSiblings.map { try XCTUnwrap(frames[$0]) }
+            let start = canvas.convert(canvas.worldToView(column[3].center), to: nil)
+            let preview = canvas.convert(canvas.worldToView(siblingSlot(1, in: column)), to: nil)
+            let releasePoint: CGPoint
+            switch release {
+            case .aboveFirst: releasePoint = siblingSlot(0, in: column)
+            case .betweenOtherSiblings: releasePoint = siblingSlot(1, in: otherColumn)
+            case .belowOtherSiblings: releasePoint = siblingSlot(otherColumn.count, in: otherColumn)
+            case .emptyCanvas: releasePoint = CGPoint(x: -2000, y: -2000)
+            }
+            let end = canvas.convert(canvas.worldToView(releasePoint), to: nil)
+            let originalNodes = editor.map.nodes
+
+            canvas.mouseDown(with: try XCTUnwrap(mouseEvent(.leftMouseDown, at: start, in: window)))
+            if release != .aboveFirst {
+                canvas.mouseDragged(with: try XCTUnwrap(mouseEvent(.leftMouseDragged, at: end, in: window)))
+                XCTAssertNil(canvas.siblingInsertionLine)
+                XCTAssertTrue(canvas.dropPreviewFrames.isEmpty)
+            }
+            canvas.mouseDragged(with: try XCTUnwrap(mouseEvent(.leftMouseDragged, at: preview, in: window)))
+            XCTAssertNotNil(canvas.siblingInsertionLine)
+            // 松手坐标可以与最后一个拖动事件不同。
+            canvas.mouseUp(with: try XCTUnwrap(mouseEvent(.leftMouseUp, at: end, in: window)))
+
+            XCTAssertNil(canvas.siblingInsertionLine)
+            if release == .aboveFirst {
+                XCTAssertEqual(editor.map.children(of: sourceParent).map(\.id),
+                               [siblings[3]] + Array(siblings.prefix(3)))
+            } else {
+                XCTAssertEqual(editor.map.nodes, originalNodes)
+            }
+        }
+    }
+
+    private func siblingSlot(_ index: Int, in frames: [CGRect]) -> CGPoint {
+        if index == 0 {
+            return CGPoint(x: frames[0].midX, y: frames[0].minY - 6)
+        }
+        if index == frames.count {
+            let last = frames[index - 1]
+            return CGPoint(x: last.midX, y: last.maxY + 6)
+        }
+        let above = frames[index - 1]
+        let below = frames[index]
+        return CGPoint(x: above.midX, y: (above.maxY + below.minY) / 2)
+    }
+
+    private func makeSiblingInsertionCanvas() throws -> (MapEditor, MindCanvasView, NSWindow, UUID, UUID) {
+        let root = MindNode(parentID: nil, text: "中心", order: 0)
+        let parent = MindNode(parentID: root.id, text: "原分支", order: 0, branchSide: .right)
+        let otherParent = MindNode(parentID: root.id, text: "其他分支", order: 1, branchSide: .left)
+        let siblings = ["A", "B", "C", "D"].enumerated().map { index, title in
+            MindNode(parentID: parent.id, text: title, order: index)
+        }
+        let descendants = [siblings[0], siblings[3]].map {
+            MindNode(parentID: $0.id, text: "子节点", order: 0)
+        }
+        let otherSiblings = ["X", "Y"].enumerated().map { index, title in
+            MindNode(parentID: otherParent.id, text: title, order: index)
+        }
+        let map = MindMap(title: "中心",
+                          nodes: [root, parent, otherParent] + siblings + descendants + otherSiblings,
+                          layout: .mindMap, themeID: "paper")
+        let editor = MapEditor(map: map, store: try DocumentStore(inMemory: true))
+        let canvas = MindCanvasView(frame: NSRect(x: 0, y: 0, width: 900, height: 700))
+        canvas.attach(editor: editor, theme: MapTheme.byID("paper"))
+        let window = canvas.attachToTestWindow()
+        canvas.setZoom(1)
+        return (editor, canvas, window, parent.id, otherParent.id)
+    }
+
     func testDragFirstLevelBranchToOtherSideAdoptsTargetSide() throws {
         let editor = try makeEditor()
         let canvas = MindCanvasView(frame: NSRect(x: 0, y: 0, width: 900, height: 700))
