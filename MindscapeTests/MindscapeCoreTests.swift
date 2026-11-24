@@ -994,10 +994,16 @@ extension MindscapeFeatureTests {
             selectedRange: NSRange(location: 2, length: 0),
             replacementRange: NSRange(location: NSNotFound, length: 0)
         )
-        // 同步是延后一拍的
-        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        // 同步是异步的，等待模型实际更新，避免共享运行器上固定延时产生误报。
+        let didSync = expectation(for: NSPredicate { _, _ in
+            editor.map.node(child.id)?.text.contains("zc") == true
+        }, evaluatedWith: nil)
+        wait(for: [didSync], timeout: 5)
 
-        XCTAssertTrue(editor.map.node(child.id)?.text.contains("zc") == true, "组字没有同步回模型")
+        XCTAssertTrue(
+            editor.map.node(child.id)?.text.contains("zc") == true,
+            "组字没有同步回模型；输入框内容：\(textView.string)，存在组字：\(textView.hasMarkedText())，是第一响应者：\(textView.window?.firstResponder === textView)"
+        )
         let widthAfter = LayoutEngine.layout(editor.map).frames[child.id]!.width
         XCTAssertGreaterThan(widthAfter, widthBefore, "组字时节点没有变宽")
 
@@ -1042,12 +1048,18 @@ extension MindscapeFeatureTests {
         XCTAssertLessThan(used.height, lineHeight, "组字时这一帧就折行了")
         XCTAssertGreaterThanOrEqual(container.containerSize.width, used.width, "容器宽度没跟上组字")
 
-        // 模型同步是延后一拍的
-        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        // 模型同步是异步的，等待实际结果而不是依赖固定延时。
+        let didSync = expectation(for: NSPredicate { _, _ in
+            editor.map.node(child.id)?.text.contains(composing) == true
+        }, evaluatedWith: nil)
+        wait(for: [didSync], timeout: 5)
         manager.ensureLayout(for: container)
         used = manager.usedRect(for: container)
         XCTAssertLessThan(used.height, lineHeight, "组字同步后又折行了")
-        XCTAssertTrue(editor.map.node(child.id)?.text.contains(composing) == true, "组字没同步到模型")
+        XCTAssertTrue(
+            editor.map.node(child.id)?.text.contains(composing) == true,
+            "组字没同步到模型；输入框内容：\(tv.string)，存在组字：\(tv.hasMarkedText())，是第一响应者：\(tv.window?.firstResponder === tv)"
+        )
         canvas.commitEditing()
     }
 }
@@ -1110,9 +1122,11 @@ extension MindscapeFeatureTests {
                     .withSymbolConfiguration(.init(pointSize: expectedHeight, weight: .medium))?
                     .size
             )
+            // 极端宽高比会按 NodeMeasurer 的显示范围夹取，不同系统的 SF Symbols 比例也可能不同。
+            let expectedAspect = min(max(natural.width / natural.height, 0.55), 1.8)
             XCTAssertEqual(
                 box.width / box.height,
-                natural.width / natural.height,
+                expectedAspect,
                 accuracy: 0.02,
                 "\(icon) 的占位比例被改掉了"
             )

@@ -1,0 +1,31 @@
+schema: spec-driven
+
+context: |
+  Language: Simplified Chinese
+  All artifacts must be written in Simplified Chinese.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Mindscape 是面向 macOS 14 及以上的本地优先思维导图应用。
+  技术栈包括 Swift、SwiftUI、AppKit、Core Graphics 和系统 SQLite。
+  当前架构基线位于 docs/architecture/overview.md，能力规格位于 openspec/specs/。
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

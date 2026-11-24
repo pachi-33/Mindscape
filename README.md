@@ -287,6 +287,8 @@ make install    # 安装到 /Applications 并启动
 xcodebuild test -project Mindscape.xcodeproj -scheme Mindscape -derivedDataPath build
 ```
 
+GitHub Actions 会在向 `main` 推送和创建或更新 Pull Request 时，校验 OpenSpec 规格并在 macOS 上执行构建与测试。也可以在仓库的 Actions 页面手动运行；测试结果会作为运行产物保留 7 天。
+
 ---
 
 ## AI Agent
@@ -402,6 +404,8 @@ Agent 也可以直接访问 `http://127.0.0.1:47821/openapi.json`（实际端口
 
 ## 设计约定
 
+当前架构、各子系统设计和能力规格的入口见 [现状架构基线](docs/architecture/overview.md)。
+
 - **画布自绘**：节点与连线走 Core Graphics，缩放时直接变换坐标系，避免大量 SwiftUI 视图带来的性能问题。
 - **布局是纯函数**：`MindMap -> LayoutResult(frames, bounds)`，画布、演示和导出复用同一份结果。
 - **编辑状态集中**：`MapEditor`（`@Observable`）负责编辑、撤销、自动保存；画布、属性面板、大纲、工具栏都读写它。
@@ -450,7 +454,8 @@ Mindscape/
 - [ ] 图片 / 附件节点
 - [ ] FTS5 全文搜索
 - [ ] 正式签名、notarization
-- [ ] CI（构建 + 测试 + 发布）
+- [x] CI（构建 + 测试）
+- [ ] 自动发布
 - [ ] 稳定 1.0 数据格式
 
 ## 已知限制
@@ -474,6 +479,7 @@ Mindscape/
 - 项目刻意保持零第三方依赖；新增依赖前请先讨论
 - 代码风格保持现有的分层：Models / Storage / Editor / Canvas / Views
 - 涉及画布交互的改动，请补一条能复现问题的 XCTest（本项目多数 bug 是这样锁住的）
+- OpenSpec 开发环境和使用方式见 [docs/openspec.md](docs/openspec.md)
 
 ---
 

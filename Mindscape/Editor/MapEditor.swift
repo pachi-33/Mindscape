@@ -675,7 +675,9 @@ final class MapEditor {
             let x = entries.map(\.1.minX).min() ?? 0
             for (id, frame) in entries { positions[id] = CGPoint(x: x, y: frame.minY) }
         case .alignCenterX:
-            let center = (entries.map(\.1.minX).min() ?? 0) + ((entries.map(\.1.maxX).max() ?? 0) - (entries.map(\.1.minX).min() ?? 0)) / 2
+            let minX = entries.map(\.1.minX).min() ?? 0
+            let maxX = entries.map(\.1.maxX).max() ?? 0
+            let center = minX + (maxX - minX) / 2
             for (id, frame) in entries { positions[id] = CGPoint(x: center - frame.width / 2, y: frame.minY) }
         case .alignRight:
             let x = entries.map(\.1.maxX).max() ?? 0
@@ -684,7 +686,9 @@ final class MapEditor {
             let y = entries.map(\.1.minY).min() ?? 0
             for (id, frame) in entries { positions[id] = CGPoint(x: frame.minX, y: y) }
         case .alignMiddleY:
-            let center = (entries.map(\.1.minY).min() ?? 0) + ((entries.map(\.1.maxY).max() ?? 0) - (entries.map(\.1.minY).min() ?? 0)) / 2
+            let minY = entries.map(\.1.minY).min() ?? 0
+            let maxY = entries.map(\.1.maxY).max() ?? 0
+            let center = minY + (maxY - minY) / 2
             for (id, frame) in entries { positions[id] = CGPoint(x: frame.minX, y: center - frame.height / 2) }
         case .alignBottom:
             let y = entries.map(\.1.maxY).max() ?? 0
