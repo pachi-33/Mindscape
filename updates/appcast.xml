@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Mindscape Updates</title>
+    <item>
+      <title>Mindscape 0.8.0-beta.1</title>
+      <link>https://github.com/pachi-33/Mindscape/releases/tag/v0.8.0-beta.1</link>
+      <description sparkle:format="plain-text">这是 Mindscape 0.8.0 的试用预发布，支持 Apple Silicon 和 Intel Mac，要求 macOS 14 或更高版本。
+
+- 从 Mindscape 的 GitHub Releases 检查更新。点击「更新」后，应用会保存当前导图、验证下载、安装并重新启动。
+- 在思维导图的非自由布局下，可以拖拽节点调整同级顺序。
+- 首次试用需从本页下载 DMG 手动安装。构建采用 ad-hoc 签名，未经 Apple 公证，macOS 的 Gatekeeper 可能阻止打开。之后可在试用版中接收同一发布源的更新。
+
+DMG 用于手动安装，ZIP 用于应用内更新。
+</description>
+      <pubDate>Tue, 24 Nov 2026 12:59:55 +0000</pubDate>
+      <sparkle:version>13</sparkle:version>
+      <sparkle:shortVersionString>0.8.0-beta.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:channel>beta</sparkle:channel>
+      <enclosure url="https://github.com/pachi-33/Mindscape/releases/download/v0.8.0-beta.1/Mindscape-0.8.0-beta.1.zip" length="5574243" type="application/octet-stream" sparkle:edSignature="xhH6AWl7mqQdDjuJag3+Lu59hsifPGSChbBtdw309iTzsG/iSUXjNnYhy6YeOSyxwWaB673dRT6DejmaR9cdBQ=="></enclosure>
+    </item>
+  </channel>
+</rss><!-- sparkle-signatures:
+edSignature: p/H3+k4IMXTbt6ySiJpYxQhJfiBgFpy0XEqLb2IVLXjS1jzmnsyDtXEA6jH0eTEam7UsauLXEphIUcvoS2rMAw==
+length: 1849
+-->
