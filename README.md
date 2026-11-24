@@ -85,7 +85,7 @@ Mindscape 是一个纯本地的 macOS 思维导图应用：打开即画，数据
 - **开箱好看**：8 套主题、8 种布局、现代留白与陶土色视觉，不需要自己调样式。
 - **真的能整理**：多级目录、大纲视图、全图搜索、专注模式、收藏、回收站。
 - **能带走**：PNG、PDF、Markdown、OPML、JSON 五种导出，也能导入 Markdown / OPML / JSON。
-- **更新不打扰**：默认不自动联网；更新询问只出现一次，下载后校验 SHA-256。
+- **更新不打扰**：默认不自动联网；更新询问只出现一次，安装前验证发布签名。
 
 ---
 
@@ -212,10 +212,10 @@ Mindscape 是一个纯本地的 macOS 思维导图应用：打开即画，数据
 
 ### 应用内更新
 
-- 设置 → 关于 或菜单栏「检查更新…」手动检查 GitHub Releases
-- 首次启动询问一次是否自动检查，默认关闭；Agent Skill 另有独立询问。之后可在 设置 → 通用 → 更新 修改
-- 更新窗口展示版本说明与包大小，下载 DMG 后校验 SHA-256，再打开安装包
-- API 限流时自动降级到 Releases Atom / 302，网络与校验都在后台执行，不阻塞界面
+- 在设置 → 关于，或菜单中的「检查更新…」查看 [Mindscape 发布](https://github.com/pachi-33/Mindscape/releases)。
+- 点击「更新」后，应用验证签名并保存当前导图，然后安装新版并重新打开。遇到错误时可以从更新窗口重试或打开发布页。
+- 自动检查默认关闭，首次启动询问一次。可在设置 → 通用 → 更新中修改。
+- 旧版需先手动安装带新更新器的过渡版。自用构建若未配置更新公钥，请手动安装新版。详见[发布与首次迁移](docs/releasing.md)。
 
 ---
 
@@ -249,13 +249,7 @@ Mindscape 是一个纯本地的 macOS 思维导图应用：打开即画，数据
 
 ### 下载
 
-**下载**：[`Mindscape-0.7.0.dmg`](https://github.com/jiuxianzai/Mindscape/releases/download/v0.7.0/Mindscape-0.7.0.dmg)，打开后把 Mindscape 拖进 Applications。
-
-当前构建为 **ad-hoc 签名**，没有 notarization。首次打开如果被 Gatekeeper 拦下：
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Mindscape.app
-```
+从 [自有仓库 Releases](https://github.com/pachi-33/Mindscape/releases) 下载正式 DMG，打开后将 Mindscape 拖进 Applications。首次迁移与从源码构建的区别见[发布说明](docs/releasing.md)。
 
 ### 从源码构建
 
@@ -278,7 +272,7 @@ open Mindscape.xcodeproj
 
 ```bash
 make package    # 生成 dist/Mindscape-0.7.0.dmg、.zip 和 .dmg.sha256
-make publish    # 用 gh 创建 GitHub Release（需已 gh auth login）
+make publish    # 签名并公证后发布到自有仓库，凭据配置见 docs/releasing.md
 make install    # 安装到 /Applications 并启动
 ```
 
@@ -454,7 +448,7 @@ Mindscape/
 - [ ] 关系线、概要、边界框
 - [ ] 图片 / 附件节点
 - [ ] FTS5 全文搜索
-- [ ] 正式签名、notarization
+- [ ] 发布首个 Developer ID 签名并公证的版本
 - [x] CI（构建 + 测试）
 - [ ] 自动发布
 - [ ] 稳定 1.0 数据格式
@@ -467,7 +461,7 @@ Mindscape/
 - 自由布局需要手动摆放，只做对齐吸附，没有自动整理
 - 目录本身还不能拖动排序
 - 演示模式按一级分支自动分页，不能手动调整顺序
-- 当前是 ad-hoc 签名，只适合本机与内部分发
+- 未配置发布签名及更新公钥的本地构建需要手动更新
 
 ---
 

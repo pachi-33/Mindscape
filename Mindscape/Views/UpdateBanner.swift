@@ -14,7 +14,7 @@ struct UpdateBanner: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Mindscape \(app.updates.release?.version.description ?? "") 可用")
                     .font(.system(size: 11.5, weight: .semibold))
-                Text("查看更新说明，下载后拖进 Applications 即可覆盖")
+                Text("查看更新说明并在应用内安装")
                     .font(.system(size: 9.5))
                     .opacity(0.82)
             }
@@ -58,6 +58,6 @@ struct UpdateBanner: View {
     }
 
     private func showWindow() {
-        UpdateWindowController.shared.show(checker: app.updates, app: app)
+        UpdateWindowController.shared.show(checker: app.updates)
     }
 }

@@ -75,8 +75,8 @@ struct MenuBarContent: View {
     }
 
     private func showUpdateWindow() {
-        UpdateWindowController.shared.show(checker: app.updates, app: app)
-        Task { await app.updates.check(manual: true) }
+        UpdateWindowController.shared.show(checker: app.updates)
+        app.updates.check(manual: true)
     }
 
     private func showMainWindow() {

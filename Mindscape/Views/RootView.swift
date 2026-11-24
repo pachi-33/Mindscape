@@ -22,6 +22,7 @@ struct RootView: View {
             .frame(minWidth: 560, minHeight: 420)
         }
         .tint(Color(nsColor: NSColor(hex: "#C26A4A")))
+        .disabled(app.updates.isPreparingApplication)
         .overlay(alignment: .top) {
             if app.updates.shouldShowBanner {
                 UpdateBanner()

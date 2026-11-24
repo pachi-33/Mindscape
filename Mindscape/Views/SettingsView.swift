@@ -793,7 +793,7 @@ struct AboutSettingsContent: View {
                                 checkForUpdates()
                             }
                             .buttonStyle(SettingsActionButtonStyle(primary: true))
-                            .disabled(app.updates.phase == .checking || app.updates.phase.isDownloading)
+                            .disabled(app.updates.phase == .checking || app.updates.phase.isUpdating)
                         }
                     }
                 }
@@ -835,9 +835,9 @@ struct AboutSettingsContent: View {
     }
 
     private func checkForUpdates() {
-        UpdateWindowController.shared.show(checker: app.updates, app: app)
+        UpdateWindowController.shared.show(checker: app.updates)
         guard app.updates.phase != .available else { return }
-        Task { await app.updates.check(manual: true) }
+        app.updates.check(manual: true)
     }
 
     private func infoRow(_ label: String, value: String) -> some View {

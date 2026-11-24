@@ -33,6 +33,7 @@ final class AppModel {
 
     let shortcuts = ShortcutStore.shared
     let updates = UpdateChecker()
+    @ObservationIgnored weak var activeCanvas: MindCanvasView?
 
     private var didExpandInitialFolders = false
     private var observers: [NSObjectProtocol] = []
@@ -95,6 +96,11 @@ final class AppModel {
             selectDocument(first.id)
         }
 
+        updates.prepareToInstall = { [weak self] in
+            guard let self else { throw UpdateError.saveUnavailable }
+            try self.saveForUpdate()
+        }
+        updates.recheckBeforeQuit = updates.prepareToInstall
         updates.start()
         applyAppearance()
     }
@@ -440,19 +446,19 @@ final class AppModel {
 
     // MARK: - Updates
 
-    /// 打开已下载的安装包前先保存并退出，避免拖动替换 .app 时被系统提示
-    /// 「请先关闭 Mindscape」。返回 false 表示安装包没能交给 LaunchServices，
-    /// 此时不退出，由调用方给出提示。
-    @discardableResult
-    func saveAndQuitForUpdate() -> Bool {
-        guard updates.downloadedFile != nil else { return false }
-        editor?.saveNow()
-        guard updates.openDownloaded() else { return false }
-        // 让 LaunchServices 先接住打开安装包的请求，再退出进程。
-        DispatchQueue.main.async {
-            NSApp.terminate(nil)
+    func saveForUpdate() throws {
+        guard store.directoryURL != nil else {
+            if editor != nil || !documents.isEmpty { throw UpdateError.inMemoryLibrary }
+            return
         }
-        return true
+        if activeCanvas?.editor === editor {
+            try activeCanvas?.commitEditingForUpdate()
+        }
+        do {
+            try editor?.saveImmediately()
+        } catch {
+            throw UpdateError.saveFailed(error)
+        }
     }
 
     // MARK: - Data directory
