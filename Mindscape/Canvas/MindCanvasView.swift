@@ -922,6 +922,11 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
                 if let insertion = siblingInsertion(at: point, under: parent, excluding: source, layout: layout) {
                     return .insertion(insertion)
                 }
+                if let grandparent = editor?.map.node(parent)?.parentID,
+                   let insertion = siblingInsertion(at: point, under: grandparent, excluding: source, layout: layout),
+                   editor?.canMove(source, to: grandparent) == true {
+                    return .insertion(insertion)
+                }
                 guard isMindMap else { return nil }
                 // 其他父节点的插入区域不能经由磁吸变成迁移落点。
                 for otherParent in layout.children.keys where otherParent != parent {
@@ -1490,7 +1495,12 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
             case .insertion(let insertion):
                 let side = editor.map.layout == .mindMap && editor.map.resolvedMindMapLayoutMode == .remember
                     ? mindMapSide(of: insertion.target) : nil
-                editor.reorder(id: source, relativeTo: insertion.target, after: insertion.after, branchSide: side)
+                if editor.map.node(source)?.parentID == editor.map.node(insertion.target)?.parentID {
+                    editor.reorder(id: source, relativeTo: insertion.target, after: insertion.after, branchSide: side)
+                } else if let parent = editor.map.node(insertion.target)?.parentID {
+                    editor.move(ids: [source], to: parent, branchSide: side,
+                                insertion: (target: insertion.target, after: insertion.after))
+                }
                 rebuildLayoutIfNeeded(force: true)
                 endNodeDrag()
                 animateFrames(from: visualStart, to: layoutResult?.frames ?? [:], duration: 0.24)

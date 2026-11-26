@@ -798,7 +798,8 @@ final class MapEditor {
         ids: Set<UUID>,
         to newParent: UUID,
         freeOrigins: [UUID: CGPoint] = [:],
-        branchSide: MindMapSide? = nil
+        branchSide: MindMapSide? = nil,
+        insertion: (target: UUID, after: Bool)? = nil
     ) -> Bool {
         guard map.node(newParent) != nil else { return false }
         let moving = topmostIDs(in: ids)
@@ -811,6 +812,11 @@ final class MapEditor {
                 (map.nodes.firstIndex(where: { $0.id == rhs }) ?? 0)
             }
         guard !ordered.isEmpty else { return false }
+        if let insertion {
+            guard ordered.count == 1,
+                  map.node(insertion.target)?.parentID == newParent,
+                  !map.subtreeIDs(of: ordered[0]).contains(insertion.target) else { return false }
+        }
 
         let wasFollowing = titleFollowsPrimaryHead
         let targetsRoot = map.rootIDs.contains(newParent)
@@ -829,6 +835,17 @@ final class MapEditor {
                     map.nodes[index].branchSide = nil
                 }
                 newOrder += 1
+            }
+            if let insertion {
+                var siblings = map.children(of: newParent).map(\.id).filter { !ordered.contains($0) }
+                if let index = siblings.firstIndex(of: insertion.target) {
+                    siblings.insert(contentsOf: ordered, at: index + (insertion.after ? 1 : 0))
+                    for (order, id) in siblings.enumerated() {
+                        if let index = map.nodes.firstIndex(where: { $0.id == id }) {
+                            map.nodes[index].order = order
+                        }
+                    }
+                }
             }
             if targetsRoot, remembering {
                 Self.assignMissingMindMapSides(in: &map)

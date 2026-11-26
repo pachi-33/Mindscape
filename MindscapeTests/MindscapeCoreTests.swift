@@ -2477,6 +2477,65 @@ extension MindscapeFeatureTests {
         }
     }
 
+    func testPromoteChildIntoParentLevelSlots() throws {
+        for layout in [MapLayout.mindMap, .logicLeft, .logicRight] {
+            for slot in [0, 1, 4] {
+                let (editor, canvas, window, parent, _) = try makeSiblingInsertionCanvas(layout: layout)
+                let siblings = editor.map.children(of: parent)
+                let source = try XCTUnwrap(editor.map.children(of: siblings[3].id).first)
+                editor.select(source.id)
+                editor.addChild(to: source.id)
+                let subtree = editor.map.subtreeIDs(of: source.id)
+                XCTAssertGreaterThan(subtree.count, 1)
+                let original = editor.map.nodes
+                let frames = LayoutEngine.layout(editor.map).frames
+                let column = try siblings.map { try XCTUnwrap(frames[$0.id]) }
+                let point = siblingSlot(slot, in: column)
+                XCTAssertFalse(frames.values.contains { $0.contains(point) })
+                let start = canvas.convert(canvas.worldToView(try XCTUnwrap(frames[source.id]).center), to: nil)
+                let end = canvas.convert(canvas.worldToView(point), to: nil)
+                window.makeKeyAndOrderFront(nil)
+                defer { window.orderOut(nil) }
+                window.sendEvent(try XCTUnwrap(mouseEvent(.leftMouseDown, at: start, in: window)))
+                window.sendEvent(try XCTUnwrap(mouseEvent(.leftMouseDragged, at: end, in: window)))
+                XCTAssertNotNil(canvas.siblingInsertionLine)
+                window.sendEvent(try XCTUnwrap(mouseEvent(.leftMouseUp, at: end, in: window)))
+                var expected = siblings.map(\.id)
+                expected.insert(source.id, at: slot)
+                XCTAssertEqual(editor.map.children(of: parent).map(\.id), expected)
+                XCTAssertEqual(editor.map.node(source.id)?.parentID, parent)
+                XCTAssertEqual(editor.map.subtreeIDs(of: source.id), subtree)
+                editor.undo()
+                XCTAssertEqual(editor.map.nodes, original)
+                editor.redo()
+                XCTAssertEqual(editor.map.children(of: parent).map(\.id), expected)
+            }
+        }
+    }
+
+    func testPromotionCancelsAtInvalidReleaseAndRejectsInvalidInsertion() throws {
+        for layout in [MapLayout.mindMap, .logicLeft, .logicRight] {
+            let (editor, canvas, window, parent, other) = try makeSiblingInsertionCanvas(layout: layout)
+            let siblings = editor.map.children(of: parent)
+            let source = try XCTUnwrap(editor.map.children(of: siblings[3].id).first)
+            let original = editor.map.nodes
+            let frames = LayoutEngine.layout(editor.map).frames
+            let column = try siblings.map { try XCTUnwrap(frames[$0.id]) }
+            let start = canvas.convert(canvas.worldToView(try XCTUnwrap(frames[source.id]).center), to: nil)
+            let hover = canvas.convert(canvas.worldToView(siblingSlot(1, in: column)), to: nil)
+            let empty = canvas.convert(canvas.worldToView(CGPoint(x: -2000, y: -2000)), to: nil)
+            canvas.mouseDown(with: try XCTUnwrap(mouseEvent(.leftMouseDown, at: start, in: window)))
+            canvas.mouseDragged(with: try XCTUnwrap(mouseEvent(.leftMouseDragged, at: hover, in: window)))
+            XCTAssertNotNil(canvas.siblingInsertionLine)
+            canvas.mouseUp(with: try XCTUnwrap(mouseEvent(.leftMouseUp, at: empty, in: window)))
+            XCTAssertNil(canvas.siblingInsertionLine)
+            XCTAssertEqual(editor.map.nodes, original)
+            XCTAssertFalse(editor.move(ids: [source.id], to: parent, insertion: (target: other, after: false)))
+            XCTAssertFalse(editor.move(ids: [siblings[3].id], to: source.id, insertion: (target: source.id, after: false)))
+            XCTAssertEqual(editor.map.nodes, original)
+        }
+    }
+
     private func siblingSlot(_ index: Int, in frames: [CGRect]) -> CGPoint {
         if index == 0 {
             return CGPoint(x: frames[0].midX, y: frames[0].minY - 6)
