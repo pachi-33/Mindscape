@@ -101,7 +101,7 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
         let line: CGRect
     }
 
-    private enum MindMapDragDestination {
+    private enum DragDestination {
         case node(UUID)
         case insertion(SiblingInsertion)
     }
@@ -910,16 +910,19 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
         return nil
     }
 
-    private func mindMapDragDestination(at point: CGPoint, ids: Set<UUID>) -> MindMapDragDestination? {
-        if let (source, parent) = mindMapInsertionSource(ids),
+    private func dragDestination(at point: CGPoint, ids: Set<UUID>) -> DragDestination? {
+        let isMindMap = editor?.map.layout == .mindMap
+        let hit = hitTest(worldPoint: point, excluding: ids)
+        if let (source, parent) = siblingInsertionSource(ids),
            let layout = hitTestLayout {
-            if let target = hitTest(worldPoint: point, excluding: ids) {
+            if let target = hit {
                 // 节点本体仍按原规则处理。
                 if canDrop(ids, on: target) { return .node(target) }
             } else {
                 if let insertion = siblingInsertion(at: point, under: parent, excluding: source, layout: layout) {
                     return .insertion(insertion)
                 }
+                guard isMindMap else { return nil }
                 // 其他父节点的插入区域不能经由磁吸变成迁移落点。
                 for otherParent in layout.children.keys where otherParent != parent {
                     if siblingInsertion(at: point, under: otherParent, excluding: source, layout: layout) != nil {
@@ -928,10 +931,14 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
                 }
             }
         }
-        return mindMapDropTarget(worldPoint: point, excluding: ids).map(MindMapDragDestination.node)
+        if isMindMap {
+            return mindMapDropTarget(worldPoint: point, excluding: ids).map(DragDestination.node)
+        }
+        guard let hit, canDrop(ids, on: hit) else { return nil }
+        return .node(hit)
     }
 
-    private func mindMapInsertionSource(_ ids: Set<UUID>) -> (source: UUID, parent: UUID)? {
+    private func siblingInsertionSource(_ ids: Set<UUID>) -> (source: UUID, parent: UUID)? {
         guard ids.count == 1, let source = ids.first,
               let parent = editor?.map.node(source)?.parentID else { return nil }
         return (source, parent)
@@ -1360,8 +1367,8 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
                 }
             } else {
                 let world = viewToWorld(point)
-                if editor?.map.layout == .mindMap {
-                    switch mindMapDragDestination(at: world, ids: ids) {
+                if editor?.map.layout.supportsSiblingInsertion == true {
+                    switch dragDestination(at: world, ids: ids) {
                     case .insertion(let insertion):
                         dropTargetID = nil
                         clearMindMapDropPreview()
@@ -1478,10 +1485,10 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
 
         let point = convert(event.locationInWindow, from: nil)
         let world = viewToWorld(point)
-        if editor.map.layout == .mindMap, let (source, _) = mindMapInsertionSource(ids) {
-            switch mindMapDragDestination(at: world, ids: ids) {
+        if editor.map.layout.supportsSiblingInsertion, let (source, _) = siblingInsertionSource(ids) {
+            switch dragDestination(at: world, ids: ids) {
             case .insertion(let insertion):
-                let side = editor.map.resolvedMindMapLayoutMode == .remember
+                let side = editor.map.layout == .mindMap && editor.map.resolvedMindMapLayoutMode == .remember
                     ? mindMapSide(of: insertion.target) : nil
                 editor.reorder(id: source, relativeTo: insertion.target, after: insertion.after, branchSide: side)
                 rebuildLayoutIfNeeded(force: true)
