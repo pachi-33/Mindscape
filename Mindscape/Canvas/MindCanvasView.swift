@@ -913,19 +913,27 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
     private func dragDestination(at point: CGPoint, ids: Set<UUID>) -> DragDestination? {
         let isMindMap = editor?.map.layout == .mindMap
         let hit = hitTest(worldPoint: point, excluding: ids)
-        if let (source, parent) = siblingInsertionSource(ids),
+        if let editor, let (source, parent) = siblingInsertionSource(ids),
            let layout = hitTestLayout {
             if let target = hit {
                 // 节点本体仍按原规则处理。
                 if canDrop(ids, on: target) { return .node(target) }
             } else {
-                if let insertion = siblingInsertion(at: point, under: parent, excluding: source, layout: layout) {
-                    return .insertion(insertion)
-                }
-                if let grandparent = editor?.map.node(parent)?.parentID,
-                   let insertion = siblingInsertion(at: point, under: grandparent, excluding: source, layout: layout),
-                   editor?.canMove(source, to: grandparent) == true {
-                    return .insertion(insertion)
+                var container = parent
+                var visited: Set<UUID> = []
+                while visited.insert(container).inserted, let node = editor.map.node(container) {
+                    if let insertion = siblingInsertion(at: point, under: container, excluding: source, layout: layout),
+                       container == parent || editor.canMove(source, to: container) {
+                        return .insertion(insertion)
+                    }
+                    guard let next = node.parentID else {
+                        if container != parent,
+                           let insertion = siblingInsertion(at: point, under: nil, excluding: source, layout: layout) {
+                            return .insertion(insertion)
+                        }
+                        break
+                    }
+                    container = next
                 }
                 guard isMindMap else { return nil }
                 // 其他父节点的插入区域不能经由磁吸变成迁移落点。
@@ -951,20 +959,29 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
 
     private func siblingInsertion(
         at point: CGPoint,
-        under parent: UUID,
+        under parent: UUID?,
         excluding source: UUID,
         layout: LayoutResult
     ) -> SiblingInsertion? {
-        guard let parentFrame = layout.frames[parent],
-              let children = layout.children[parent] else { return nil }
+        let children: [UUID]
+        let parentFrame: CGRect?
+        if let parent {
+            guard let frame = layout.frames[parent] else { return nil }
+            parentFrame = frame
+            children = layout.children[parent] ?? []
+        } else {
+            parentFrame = nil
+            children = layout.rootIDs
+        }
         let zoom = max(camera.zoom, CanvasCamera.minZoom)
         let endPadding = 24 / zoom
         let sidePadding = 10 / zoom
         let lineThickness = 2 / zoom
-        let isLeft = point.x < parentFrame.midX
         let column = children.compactMap { id -> (id: UUID, frame: CGRect)? in
-            guard id != source, let frame = layout.frames[id],
-                  (frame.midX < parentFrame.midX) == isLeft else { return nil }
+            guard id != source, let frame = layout.frames[id] else { return nil }
+            if let parentFrame, (frame.midX < parentFrame.midX) != (point.x < parentFrame.midX) {
+                return nil
+            }
             return (id, frame)
         }
         guard let first = column.first, let last = column.last else { return nil }
@@ -1500,6 +1517,8 @@ final class MindCanvasView: NSView, NSTextViewDelegate, NSUserInterfaceValidatio
                 } else if let parent = editor.map.node(insertion.target)?.parentID {
                     editor.move(ids: [source], to: parent, branchSide: side,
                                 insertion: (target: insertion.target, after: insertion.after))
+                } else {
+                    editor.placeAtRootLevel(id: source, relativeTo: insertion.target, after: insertion.after)
                 }
                 rebuildLayoutIfNeeded(force: true)
                 endNodeDrag()

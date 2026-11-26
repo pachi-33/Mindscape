@@ -894,22 +894,8 @@ final class MapEditor {
               let node = map.node(id),
               let target = map.node(targetID) else { return }
 
-        // 头部节点之间也可以排序
         if node.parentID == nil, target.parentID == nil {
-            let roots = map.rootIDs
-            guard roots.contains(id), roots.contains(targetID) else { return }
-            let wasFollowing = titleFollowsPrimaryHead
-            mutate { map in
-                var ids = roots.filter { $0 != id }
-                guard let index = ids.firstIndex(of: targetID) else { return }
-                ids.insert(id, at: after ? index + 1 : index)
-                for (order, rootID) in ids.enumerated() {
-                    if let nodeIndex = map.nodes.firstIndex(where: { $0.id == rootID }) {
-                        map.nodes[nodeIndex].order = order
-                    }
-                }
-                refreshTitleIfFollowing(wasFollowing, in: &map)
-            }
+            placeAtRootLevel(id: id, relativeTo: targetID, after: after)
             return
         }
 
@@ -935,6 +921,28 @@ final class MapEditor {
                let nodeIndex = map.nodes.firstIndex(where: { $0.id == id }) {
                 map.nodes[nodeIndex].branchSide = branchSide
             }
+        }
+    }
+
+    /// 将节点连同子树放到头部序列的指定位置，或调整已有头部的顺序。
+    func placeAtRootLevel(id: UUID, relativeTo targetID: UUID, after: Bool) {
+        guard id != targetID, let node = map.node(id), map.node(targetID)?.parentID == nil,
+              !map.isDescendant(targetID, of: id) else { return }
+        var roots = map.rootIDs.filter { $0 != id }
+        guard let targetIndex = roots.firstIndex(of: targetID) else { return }
+        roots.insert(id, at: targetIndex + (after ? 1 : 0))
+
+        let wasFollowing = titleFollowsPrimaryHead
+        mutate { map in
+            for (order, rootID) in roots.enumerated() {
+                guard let index = map.nodes.firstIndex(where: { $0.id == rootID }) else { continue }
+                map.nodes[index].order = order
+                if rootID == id, node.parentID != nil {
+                    map.nodes[index].parentID = nil
+                    map.nodes[index].branchSide = nil
+                }
+            }
+            refreshTitleIfFollowing(wasFollowing, in: &map)
         }
     }
 
