@@ -2378,13 +2378,22 @@ extension MindscapeFeatureTests {
     }
 
     func testMindMapDragInsertsBetweenSiblingsAndAtBothEnds() throws {
+        try assertSiblingInsertions(layout: .mindMap)
+    }
+
+    func testLogicMapsDragInsertsBetweenSiblingsAndAtBothEnds() throws {
+        try assertSiblingInsertions(layout: .logicLeft)
+        try assertSiblingInsertions(layout: .logicRight)
+    }
+
+    private func assertSiblingInsertions(layout: MapLayout) throws {
         let examples: [(source: Int, slot: Int, expected: [Int])] = [
             (3, 0, [3, 0, 1, 2]),
             (3, 1, [0, 3, 1, 2]),
             (0, 4, [1, 2, 3, 0])
         ]
         for example in examples {
-            let (editor, canvas, window, sourceParent, _) = try makeSiblingInsertionCanvas()
+            let (editor, canvas, window, sourceParent, _) = try makeSiblingInsertionCanvas(layout: layout)
             let nodes = editor.map.children(of: sourceParent)
             let originalOrder = nodes.map(\.id)
             let source = nodes[example.source]
@@ -2418,9 +2427,18 @@ extension MindscapeFeatureTests {
     }
 
     func testMindMapSiblingInsertionRechecksReleasePosition() throws {
+        try assertSiblingInsertionReleasePosition(layout: .mindMap)
+    }
+
+    func testLogicMapsSiblingInsertionRechecksReleasePosition() throws {
+        try assertSiblingInsertionReleasePosition(layout: .logicLeft)
+        try assertSiblingInsertionReleasePosition(layout: .logicRight)
+    }
+
+    private func assertSiblingInsertionReleasePosition(layout: MapLayout) throws {
         enum Release: CaseIterable { case aboveFirst, betweenOtherSiblings, belowOtherSiblings, emptyCanvas }
         for release in Release.allCases {
-            let (editor, canvas, window, sourceParent, otherParent) = try makeSiblingInsertionCanvas()
+            let (editor, canvas, window, sourceParent, otherParent) = try makeSiblingInsertionCanvas(layout: layout)
             let siblings = editor.map.children(of: sourceParent).map(\.id)
             let otherSiblings = editor.map.children(of: otherParent).map(\.id)
             let frames = LayoutEngine.layout(editor.map).frames
@@ -2472,7 +2490,7 @@ extension MindscapeFeatureTests {
         return CGPoint(x: above.midX, y: (above.maxY + below.minY) / 2)
     }
 
-    private func makeSiblingInsertionCanvas() throws -> (MapEditor, MindCanvasView, NSWindow, UUID, UUID) {
+    private func makeSiblingInsertionCanvas(layout: MapLayout) throws -> (MapEditor, MindCanvasView, NSWindow, UUID, UUID) {
         let root = MindNode(parentID: nil, text: "中心", order: 0)
         let parent = MindNode(parentID: root.id, text: "原分支", order: 0, branchSide: .right)
         let otherParent = MindNode(parentID: root.id, text: "其他分支", order: 1, branchSide: .left)
@@ -2487,7 +2505,7 @@ extension MindscapeFeatureTests {
         }
         let map = MindMap(title: "中心",
                           nodes: [root, parent, otherParent] + siblings + descendants + otherSiblings,
-                          layout: .mindMap, themeID: "paper")
+                          layout: layout, themeID: "paper")
         let editor = MapEditor(map: map, store: try DocumentStore(inMemory: true))
         let canvas = MindCanvasView(frame: NSRect(x: 0, y: 0, width: 900, height: 700))
         canvas.attach(editor: editor, theme: MapTheme.byID("paper"))

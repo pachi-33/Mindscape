@@ -38,6 +38,10 @@ enum MapLayout: String, CaseIterable, Codable, Identifiable, Sendable {
         }
     }
 
+    var supportsSiblingInsertion: Bool {
+        self == .mindMap || self == .logicLeft || self == .logicRight
+    }
+
     var usesAutoLayout: Bool { self != .free }
 }
 
