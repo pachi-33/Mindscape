@@ -2536,6 +2536,86 @@ extension MindscapeFeatureTests {
         }
     }
 
+    func testDragToDistantAncestorLevel() throws {
+        for layout in [MapLayout.mindMap, .logicLeft, .logicRight] {
+            for extraDepth in [1, 3] {
+                for slot in 0...4 {
+                    let (editor, canvas, window, parent, _) = try makeSiblingInsertionCanvas(layout: layout)
+                    let siblings = editor.map.children(of: parent)
+                    var source = try XCTUnwrap(editor.map.children(of: siblings[3].id).first).id
+                    for _ in 0..<extraDepth {
+                        source = try XCTUnwrap(editor.addChild(to: source))
+                    }
+                    _ = try XCTUnwrap(editor.addChild(to: source))
+                    canvas.attach(editor: editor, theme: MapTheme.byID("paper"))
+                    let frames = LayoutEngine.layout(editor.map).frames
+                    let column = try siblings.map { try XCTUnwrap(frames[$0.id]) }
+                    let point = siblingSlot(slot, in: column)
+                    let original = editor.map.nodes
+                    let subtree = editor.map.subtreeIDs(of: source)
+                    var expected = siblings.map(\.id)
+                    expected.insert(source, at: slot)
+
+                    try dragToAncestorSlot(canvas, window: window, from: XCTUnwrap(frames[source]).center, to: point)
+
+                    XCTAssertEqual(editor.map.children(of: parent).map(\.id), expected,
+                                   "\(layout), depth \(extraDepth), slot \(slot)")
+                    XCTAssertEqual(editor.map.subtreeIDs(of: source), subtree)
+                    editor.undo()
+                    XCTAssertEqual(editor.map.nodes, original)
+                    editor.redo()
+                    XCTAssertEqual(editor.map.children(of: parent).map(\.id), expected)
+                }
+            }
+        }
+    }
+
+    func testDragDescendantToRootLevel() throws {
+        for layout in [MapLayout.mindMap, .logicLeft, .logicRight] {
+            for (headCount, slot) in [(1, 0), (1, 1), (2, 0), (2, 1), (2, 2)] {
+                let root = MindNode(parentID: nil, text: "原头部", order: 0)
+                let other = MindNode(parentID: nil, text: "另一头部", order: 1)
+                let branch = MindNode(parentID: root.id, text: "分支", order: 0)
+                let source = MindNode(parentID: branch.id, text: "待提升", order: 0)
+                let child = MindNode(parentID: source.id, text: "随行", order: 0)
+                let heads = Array([root, other].prefix(headCount))
+                let map = MindMap(title: root.text, nodes: heads + [branch, source, child],
+                                  layout: layout, themeID: "paper")
+                let editor = MapEditor(map: map, store: try DocumentStore(inMemory: true))
+                let canvas = MindCanvasView(frame: NSRect(x: 0, y: 0, width: 900, height: 700))
+                canvas.attach(editor: editor, theme: MapTheme.byID("paper"))
+                let window = canvas.attachToTestWindow()
+                let original = editor.map.nodes
+                let frames = LayoutEngine.layout(editor.map).frames
+                let column = try heads.map { try XCTUnwrap(frames[$0.id]) }
+                let point = siblingSlot(slot, in: column)
+                var expected = heads.map(\.id)
+                expected.insert(source.id, at: slot)
+
+                try dragToAncestorSlot(canvas, window: window, from: XCTUnwrap(frames[source.id]).center, to: point)
+
+                XCTAssertEqual(editor.map.rootIDs, expected, "\(layout), head slot \(slot)")
+                XCTAssertEqual(editor.map.node(child.id)?.parentID, source.id)
+                XCTAssertEqual(editor.map.title, slot == 0 ? source.text : root.text)
+                editor.undo()
+                XCTAssertEqual(editor.map.nodes, original)
+                editor.redo()
+                XCTAssertEqual(editor.map.rootIDs, expected)
+            }
+        }
+    }
+
+    private func dragToAncestorSlot(_ canvas: MindCanvasView, window: NSWindow,
+                                    from source: CGPoint, to point: CGPoint) throws {
+        let start = canvas.convert(canvas.worldToView(source), to: nil)
+        let end = canvas.convert(canvas.worldToView(point), to: nil)
+        canvas.mouseDown(with: try XCTUnwrap(mouseEvent(.leftMouseDown, at: start, in: window)))
+        canvas.mouseDragged(with: try XCTUnwrap(mouseEvent(.leftMouseDragged, at: end, in: window)))
+        XCTAssertNotNil(canvas.siblingInsertionLine)
+        canvas.mouseUp(with: try XCTUnwrap(mouseEvent(.leftMouseUp, at: end, in: window)))
+        XCTAssertNil(canvas.siblingInsertionLine)
+    }
+
     private func siblingSlot(_ index: Int, in frames: [CGRect]) -> CGPoint {
         if index == 0 {
             return CGPoint(x: frames[0].midX, y: frames[0].minY - 6)
