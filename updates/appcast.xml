@@ -4,6 +4,20 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>Mindscape Updates</title>
     <item>
+      <title>Mindscape 0.8.0-beta.5</title>
+      <link>https://github.com/pachi-33/Mindscape/releases/tag/v0.8.0-beta.5</link>
+      <description sparkle:format="plain-text">修复右上角属性面板按钮可能无法响应鼠标点击的问题。点一下即可显示或隐藏面板，窗口未激活时也能直接点击。
+
+支持 Intel 和 Apple Silicon Mac，要求 macOS 14 或更高版本。已有 beta 版本可在应用内检查更新。本预发布版采用 ad-hoc 签名，未经 Apple 公证。
+</description>
+      <pubDate>Fri, 27 Nov 2026 08:31:59 +0000</pubDate>
+      <sparkle:version>17</sparkle:version>
+      <sparkle:shortVersionString>0.8.0-beta.5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:channel>beta</sparkle:channel>
+      <enclosure url="https://github.com/pachi-33/Mindscape/releases/download/v0.8.0-beta.5/Mindscape-0.8.0-beta.5.zip" length="5579337" type="application/octet-stream" sparkle:edSignature="bLOQQaDkUcHr3keeWA95X2bVLdgMhR8/aFvfZQL8BPlQN81NaFwogySQzbdU1VKbrsGQwDF6jqvB0utt43RcDw=="></enclosure>
+    </item>
+    <item>
       <title>Mindscape 0.8.0-beta.4</title>
       <link>https://github.com/pachi-33/Mindscape/releases/tag/v0.8.0-beta.4</link>
       <description sparkle:format="plain-text">思维导图与左右逻辑图支持把孙子节点或更深的节点拖到祖先所在层级。在首尾或两个兄弟节点之间看到插入线后松手，整棵子树会移动到指定位置。一次撤销即可恢复。
@@ -65,6 +79,6 @@ DMG 用于手动安装，ZIP 用于应用内更新。
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: NWEkkGiL47MeDrxgvOvvUkNGvnETVPxu8V67R2C1IdT8+HGvnIJTOV+eHLWc+vayJS6zkHXjrMKM4hJjF0L9BQ==
-length: 5420
+edSignature: dYHCKmxQrEBODVmZLwkENeeIBNfxYwybaQkl92kPgtQXA6sF7RgRAtnOXQlUO+OYZYkDQg15MOIGBbv70R02AA==
+length: 6556
 -->
