@@ -519,6 +519,40 @@ final class MindscapeFeatureTests: XCTestCase {
 }
 
 extension MindscapeFeatureTests {
+    func testMouseClickInInspectorTitlebarButtonSendsToggle() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.isMovableByWindowBackground = true
+        window.toolbar = NSToolbar(identifier: "InspectorClickTest")
+        window.toolbarStyle = .unified
+        let coordinator = InspectorTitlebarToggle.Coordinator()
+        coordinator.install(in: window)
+        window.makeKeyAndOrderFront(nil)
+        defer {
+            coordinator.uninstall()
+            window.orderOut(nil)
+        }
+
+        let accessory = try XCTUnwrap(window.titlebarAccessoryViewControllers.first?.view)
+        let frame = accessory.convert(accessory.bounds, to: nil)
+        let point = NSPoint(x: frame.midX + 10, y: frame.midY)
+        let down = try XCTUnwrap(mouseEvent(.leftMouseDown, at: point, in: window))
+        let container = try XCTUnwrap(accessory.superview)
+        let hit = try XCTUnwrap(accessory.hitTest(container.convert(point, from: nil)))
+        XCTAssertFalse(hit.mouseDownCanMoveWindow)
+        XCTAssertTrue(hit.acceptsFirstMouse(for: down))
+
+        let toggle = expectation(forNotification: .mindscapeToggleInspector, object: nil)
+        toggle.assertForOverFulfill = true
+        window.postEvent(try XCTUnwrap(mouseEvent(.leftMouseUp, at: point, in: window)), atStart: true)
+        window.sendEvent(down)
+        wait(for: [toggle], timeout: 1)
+    }
+
     func testCanvasCopyPasteResponder() throws {
         let editor = try makeEditor()
         let canvas = MindCanvasView(frame: NSRect(x: 0, y: 0, width: 900, height: 700))

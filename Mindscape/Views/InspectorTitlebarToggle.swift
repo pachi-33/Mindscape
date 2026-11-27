@@ -25,23 +25,38 @@ struct InspectorTitlebarToggle: NSViewRepresentable {
         coordinator.uninstall()
     }
 
-    final class Coordinator {
+    final class Coordinator: NSObject {
         private var accessory: NSTitlebarAccessoryViewController?
         private weak var window: NSWindow?
 
         func install(in window: NSWindow) {
-            guard accessory == nil, self.window !== window else { return }
+            guard self.window !== window else { return }
+            uninstall()
 
-            let hosting = NSHostingView(rootView: InspectorTitlebarButton())
-            hosting.frame = NSRect(x: 0, y: 0, width: 48, height: 28)
+            let container = NSView(frame: NSRect(x: 0, y: 0, width: 48, height: 28))
+            let button = InspectorTitlebarButton(frame: NSRect(x: 10, y: 0, width: 28, height: 28))
+            let title = String(localized: "显示 / 隐藏属性面板")
+            button.image = NSImage(systemSymbolName: "sidebar.right", accessibilityDescription: title)
+            button.imagePosition = .imageOnly
+            button.bezelStyle = .accessoryBarAction
+            button.target = self
+            button.action = #selector(toggleInspector)
+            button.toolTip = String(localized: "显示 / 隐藏属性面板（⌥⌘I）")
+            button.setAccessibilityLabel(title)
+            button.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+            container.addSubview(button)
 
             let controller = NSTitlebarAccessoryViewController()
-            controller.view = hosting
+            controller.view = container
             controller.layoutAttribute = .trailing
             window.addTitlebarAccessoryViewController(controller)
 
             accessory = controller
             self.window = window
+        }
+
+        @objc private func toggleInspector() {
+            NotificationCenter.default.post(name: .mindscapeToggleInspector, object: nil)
         }
 
         func uninstall() {
@@ -64,25 +79,8 @@ private final class WindowAnchorView: NSView {
     }
 }
 
-private struct InspectorTitlebarButton: View {
-    @State private var hovering = false
+private final class InspectorTitlebarButton: NSButton {
+    override var mouseDownCanMoveWindow: Bool { false }
 
-    var body: some View {
-        Button {
-            NotificationCenter.default.post(name: .mindscapeToggleInspector, object: nil)
-        } label: {
-            Image(systemName: "sidebar.right")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.primary.opacity(0.8))
-                .frame(width: 28, height: 28)
-                .background(
-                    Circle()
-                        .fill(Color.primary.opacity(hovering ? 0.10 : 0.06))
-                )
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help("显示 / 隐藏属性面板（⌥⌘I）")
-        .padding(.horizontal, 10)
-    }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
