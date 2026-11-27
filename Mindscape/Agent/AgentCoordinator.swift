@@ -132,7 +132,10 @@ final class AgentCoordinator {
         if case .running = state { return }
 
         do {
-            let service = AgentService(store: app.store) { [weak app] documentID in
+            let service = AgentService(store: app.store, beforeReadingSequence: { [weak app] documentID in
+                guard let editor = app?.editor, editor.map.id == documentID else { return }
+                try editor.flushPendingSequenceSave()
+            }) { [weak app] documentID in
                 app?.reloadAfterExternalChange(documentID: documentID)
             }
             let server = AgentHTTPServer()

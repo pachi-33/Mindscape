@@ -10,6 +10,12 @@ struct ExportSheet: View {
 
     private let accent = Color(nsColor: NSColor(hex: "#C26A4A"))
 
+    private var formatTip: LocalizedStringKey {
+        editor.map.isSequence
+            ? "PNG / PDF 用于分享图形，JSON 可重新导入并继续编辑图形。"
+            : "PNG / PDF 适合直接发出去；Markdown / OPML 适合导入其他大纲工具；JSON 适合备份和迁移。"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top) {
@@ -34,7 +40,7 @@ struct ExportSheet: View {
                     sectionLabel("格式")
 
                     VStack(spacing: 6) {
-                        ForEach(ExportFormat.allCases) { item in
+                        ForEach(ExportFormat.allCases.filter { !editor.map.isSequence || $0.supportsSequence }) { item in
                             formatRow(item)
                         }
                     }
@@ -57,7 +63,7 @@ struct ExportSheet: View {
                         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
 
-                    Text("PNG / PDF 适合直接发出去；Markdown / OPML 适合导入其他大纲工具；JSON 适合备份和迁移。")
+                    Text(formatTip)
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -151,10 +157,8 @@ struct ExportSheet: View {
     }
 
     private func save() {
-        let layout = LayoutEngine.layout(editor.map)
         if ExportService.save(
             map: editor.map,
-            layout: layout,
             format: format,
             scale: CGFloat(pngScale)
         ) {
@@ -164,10 +168,8 @@ struct ExportSheet: View {
 
     private func share() {
         do {
-            let layout = LayoutEngine.layout(editor.map)
             let url = try ExportService.temporaryURL(
                 map: editor.map,
-                layout: layout,
                 format: format,
                 scale: CGFloat(pngScale)
             )

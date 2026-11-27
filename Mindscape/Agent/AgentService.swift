@@ -9,6 +9,7 @@ final class AgentService {
     private let skillInstaller: AgentSkillInstaller?
     private let openAPIData: Data?
     private let skillData: Data?
+    private let beforeReadingSequence: (UUID) throws -> Void
 
     init(
         store: DocumentStore,
@@ -16,6 +17,7 @@ final class AgentService {
         skillInstaller: AgentSkillInstaller? = AgentSkillInstaller(),
         openAPIData: Data? = AgentResources.data(named: "openapi", extension: "json"),
         skillData: Data? = AgentResources.data(named: "SKILL", extension: "md"),
+        beforeReadingSequence: @escaping (UUID) throws -> Void = { _ in },
         onChange: @escaping (UUID?) -> Void
     ) {
         self.store = store
@@ -23,6 +25,7 @@ final class AgentService {
         self.skillInstaller = skillInstaller
         self.openAPIData = openAPIData
         self.skillData = skillData
+        self.beforeReadingSequence = beforeReadingSequence
         self.onChange = onChange
     }
 
@@ -169,6 +172,9 @@ final class AgentService {
     private func createMap(_ request: AgentHTTPRequest) throws -> AgentHTTPResponse {
         let body: AgentCreateMapBody = try decode(request.body)
         let template = MapTemplate(rawValue: body.template ?? "blank") ?? .blank
+        if template == .sequence, body.rootText != nil || body.layout != nil {
+            throw AgentAPIError.badRequest("UML 时序图不支持根节点或树形布局", code: "wrong_document_type")
+        }
         let layout = MapLayout(rawValue: body.layout ?? "") ?? .mindMap
         let requestedTheme = body.theme.flatMap { id in MapTheme.all.first(where: { $0.id == id }) }?.id ?? MapTheme.defaultThemeID
         let themeID = ThemePolicy.adjusted(requestedTheme, isDark: NSApplication.shared.isDarkAppearance)
@@ -187,8 +193,12 @@ final class AgentService {
             map.nodes[index].text = rootText
         }
         let title = body.title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let title, !title.isEmpty { try validateLength(title, field: "标题", max: 200) }
-        map.title = (title?.isEmpty == false ? title : nil) ?? map.primaryHeadText
+        if let title, !title.isEmpty {
+            try validateLength(title, field: "标题", max: 200)
+            map.title = title
+        } else if !map.isSequence {
+            map.title = map.primaryHeadText
+        }
         map.normalizeTheme(isDark: NSApplication.shared.isDarkAppearance)
         map.createdAt = Date()
         map.updatedAt = Date()
@@ -200,7 +210,7 @@ final class AgentService {
     private func showMap(parts: [String]) throws -> AgentHTTPResponse {
         guard parts.count == 3 else { throw AgentAPIError.notFound("导图 ID 缺失") }
         let id = try AgentPath.uuid(parts[2], name: "mapId")
-        let map = try loadMap(id)
+        let map = try syncOpenSequence(loadMap(id))
         let folderID = try store.list(includeDeleted: true).first(where: { $0.id == id })?.folderID
         return .json(AgentSuccessEnvelope(data: AgentMapDTO(map: map, folderID: folderID)))
     }
@@ -211,41 +221,46 @@ final class AgentService {
         var map = try loadMap(id)
         let body: AgentUpdateMapBody = try decode(request.body)
 
-        if let title = body.title {
-            let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { throw AgentAPIError.badRequest("标题不能为空") }
-            map.title = trimmed
+        if map.isSequence, body.layout != nil {
+            throw AgentAPIError.badRequest("UML 时序图不支持树形布局", code: "wrong_document_type")
         }
-        if let layout = body.layout {
-            guard let parsed = MapLayout(rawValue: layout) else {
-                throw AgentAPIError.badRequest("未知布局：\(layout)")
-            }
-            map.layout = parsed
+        if !map.isSequence, body.sequenceSource != nil {
+            throw AgentAPIError.badRequest("只有 UML 时序图支持 sequenceSource", code: "wrong_document_type")
         }
+
+        let title = body.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if title?.isEmpty == true { throw AgentAPIError.badRequest("标题不能为空") }
+
+        let layout = body.layout.flatMap(MapLayout.init(rawValue:))
+        if let raw = body.layout, layout == nil {
+            throw AgentAPIError.badRequest("未知布局：\(raw)")
+        }
+        let isDark = NSApplication.shared.isDarkAppearance
         if let theme = body.theme {
             guard MapTheme.all.contains(where: { $0.id == theme }) else {
                 throw AgentAPIError.badRequest("未知主题：\(theme)")
             }
-            let isDark = NSApplication.shared.isDarkAppearance
             guard ThemePolicy.allows(theme, isDark: isDark) else {
                 throw AgentAPIError.badRequest("主题「\(theme)」不适用于当前外观。")
             }
-            map.rememberTheme(theme, isDark: isDark)
         }
-        map.updatedAt = Date()
-        try store.save(map)
 
-        if let raw = body.folderId {
-            if raw.isEmpty {
-                try store.setFolder(documentID: id, folderID: nil)
-            } else {
-                let folderID = try AgentPath.uuid(raw, name: "folderId")
-                guard try store.folders().contains(where: { $0.id == folderID }) else {
-                    throw AgentAPIError.notFound("目录不存在")
-                }
-                try store.setFolder(documentID: id, folderID: folderID)
+        var destinationID: UUID?
+        if let raw = body.folderId, !raw.isEmpty {
+            let folderID = try AgentPath.uuid(raw, name: "folderId")
+            guard try store.folders().contains(where: { $0.id == folderID }) else {
+                throw AgentAPIError.notFound("目录不存在")
             }
+            destinationID = folderID
         }
+
+        map = try syncOpenSequence(map)
+        if let title { map.title = title }
+        if let layout { map.layout = layout }
+        if let theme = body.theme { map.rememberTheme(theme, isDark: isDark) }
+        if let source = body.sequenceSource { map.sequenceSource = source }
+        map.updatedAt = Date()
+        try store.save(map, folderID: destinationID, replaceFolder: body.folderId != nil)
 
         onChange(id)
         let folderID = try store.list(includeDeleted: true).first(where: { $0.id == id })?.folderID
@@ -306,7 +321,7 @@ final class AgentService {
 
     private func addNode(_ request: AgentHTTPRequest, mapID: UUID) throws -> AgentHTTPResponse {
         let body: AgentAddNodeBody = try decode(request.body)
-        var map = try loadMap(mapID)
+        var map = try loadTree(mapID)
 
         var parentID: UUID?
         if let raw = body.parentId, !raw.isEmpty {
@@ -346,7 +361,7 @@ final class AgentService {
 
     private func updateNode(_ request: AgentHTTPRequest, mapID: UUID, nodeID: UUID) throws -> AgentHTTPResponse {
         let body: AgentUpdateNodeBody = try decode(request.body)
-        var map = try loadMap(mapID)
+        var map = try loadTree(mapID)
         guard let index = map.nodes.firstIndex(where: { $0.id == nodeID }) else {
             throw AgentAPIError.notFound("节点不存在")
         }
@@ -369,7 +384,7 @@ final class AgentService {
 
     private func moveNode(_ request: AgentHTTPRequest, mapID: UUID, nodeID: UUID) throws -> AgentHTTPResponse {
         let body: AgentMoveNodeBody = try decode(request.body)
-        var map = try loadMap(mapID)
+        var map = try loadTree(mapID)
         guard let index = map.nodes.firstIndex(where: { $0.id == nodeID }) else {
             throw AgentAPIError.notFound("节点不存在")
         }
@@ -394,7 +409,7 @@ final class AgentService {
     }
 
     private func deleteNode(mapID: UUID, nodeID: UUID) throws -> AgentHTTPResponse {
-        var map = try loadMap(mapID)
+        var map = try loadTree(mapID)
         guard map.node(nodeID) != nil else { throw AgentAPIError.notFound("节点不存在") }
         let ids = map.subtreeIDs(of: nodeID)
         guard map.nodes.count > ids.count else {
@@ -412,7 +427,7 @@ final class AgentService {
         guard !body.operations.isEmpty else { throw AgentAPIError.badRequest("operations 不能为空") }
         guard body.operations.count <= 500 else { throw AgentAPIError.badRequest("单次最多 500 个操作") }
 
-        var map = try loadMap(mapID)
+        var map = try loadTree(mapID)
         for operation in body.operations {
             try apply(operation, to: &map)
         }
@@ -503,10 +518,20 @@ final class AgentService {
             throw AgentAPIError.badRequest("未知导出格式：\(body.format)")
         }
         let map = try loadMap(mapID)
-        let scale = min(max(body.scale ?? 2, 1), 3)
+        guard !map.isSequence || format.supportsSequence else {
+            throw AgentAPIError.badRequest(ExportError.unsupportedSequenceFormat.localizedDescription, code: "wrong_document_type")
+        }
         let url = try resolveFileURL(path: body.path, expectedExtension: format.fileExtension)
-        let layout = LayoutEngine.layout(map)
-        let data = try ExportService.makeData(map: map, layout: layout, format: format, scale: CGFloat(scale))
+        let current = try syncOpenSequence(map)
+        let scale = min(max(body.scale ?? 2, 1), 3)
+        let data: Data
+        do {
+            data = try ExportService.makeData(map: current, format: format, scale: CGFloat(scale))
+        } catch ExportError.invalidSequenceSource(let message) {
+            throw AgentAPIError.badRequest(message, code: "invalid_sequence_source")
+        } catch ExportError.sequenceImageTooLarge {
+            throw AgentAPIError.badRequest(ExportError.sequenceImageTooLarge.localizedDescription, code: "image_too_large")
+        }
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: url, options: .atomic)
         return .json(AgentSuccessEnvelope(data: AgentExportResult(
@@ -524,7 +549,13 @@ final class AgentService {
         let theme = ThemePolicy.adjusted(requestedTheme, isDark: NSApplication.shared.isDarkAppearance)
         var map = try MapImporter.load(url: url, themeID: theme, layout: layout)
         map.normalizeTheme(isDark: NSApplication.shared.isDarkAppearance)
-        map.title = url.deletingPathExtension().lastPathComponent
+        if map.isSequence {
+            guard body.layout == nil else {
+                throw AgentAPIError.badRequest("UML 时序图不支持树形布局", code: "wrong_document_type")
+            }
+        } else {
+            map.title = url.deletingPathExtension().lastPathComponent
+        }
         map.updatedAt = Date()
 
         var folderID: UUID?
@@ -547,6 +578,20 @@ final class AgentService {
     private func loadMap(_ id: UUID) throws -> MindMap {
         guard var map = try store.load(id: id) else { throw AgentAPIError.notFound("导图不存在") }
         map.normalizeTheme(isDark: NSApplication.shared.isDarkAppearance)
+        return map
+    }
+
+    private func syncOpenSequence(_ map: MindMap) throws -> MindMap {
+        guard map.isSequence else { return map }
+        try beforeReadingSequence(map.id)
+        return try loadMap(map.id)
+    }
+
+    private func loadTree(_ id: UUID) throws -> MindMap {
+        let map = try loadMap(id)
+        guard !map.isSequence else {
+            throw AgentAPIError.badRequest("UML 时序图使用 sequenceSource 编辑", code: "wrong_document_type")
+        }
         return map
     }
 

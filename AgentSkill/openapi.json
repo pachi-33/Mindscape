@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Mindscape Local Agent API",
-    "version": "1.0.0",
-    "description": "Local-only API for operating Mindscape mind maps. The gateway binds 127.0.0.1, requires a per-session bearer token, and stops after the configured idle timeout. Read SKILL.md for workflows and safety rules."
+    "version": "1.1.0",
+    "description": "Local-only API for operating Mindscape mind maps and UML sequence diagrams. The gateway binds 127.0.0.1, requires a per-session bearer token, and stops after the configured idle timeout. Read SKILL.md for workflows and safety rules."
   },
   "servers": [
     {
@@ -67,9 +67,18 @@
           "createdAt": { "type": "string", "format": "date-time" },
           "updatedAt": { "type": "string", "format": "date-time" },
           "rootIds": { "type": "array", "items": { "type": "string", "format": "uuid" } },
-          "nodes": { "type": "array", "items": { "$ref": "#/components/schemas/Node" } }
+          "nodes": { "type": "array", "items": { "$ref": "#/components/schemas/Node" } },
+          "sequenceSource": { "type": "string", "description": "Present for UML sequence diagrams, including an empty string for a blank template. Their node and root arrays are empty." }
         },
         "required": ["id", "title", "layout", "theme", "rootIds", "nodes"]
+      },
+      "MapResult": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "const": true },
+          "data": { "$ref": "#/components/schemas/Map" }
+        },
+        "required": ["ok", "data"]
       },
       "MapSummary": {
         "type": "object",
@@ -80,7 +89,8 @@
           "theme": { "type": "string" },
           "folderId": { "type": ["string", "null"] },
           "updatedAt": { "type": "string", "format": "date-time" },
-          "nodeCount": { "type": "integer" }
+          "nodeCount": { "type": "integer" },
+          "isSequence": { "type": "boolean", "description": "Whether this document is a UML sequence diagram." }
         },
         "required": ["id", "title", "nodeCount"]
       },
@@ -170,27 +180,38 @@
                 "type": "object",
                 "properties": {
                   "title": { "type": "string" },
-                  "rootText": { "type": "string" },
+                  "rootText": { "type": "string", "description": "Tree maps only." },
                   "folderId": { "type": ["string", "null"], "format": "uuid" },
-                  "layout": { "type": "string" },
+                  "layout": { "type": "string", "description": "Tree maps only." },
                   "theme": { "type": "string" },
-                  "template": { "type": "string", "enum": ["blank", "project", "meeting", "reading", "swot", "weekly"] }
+                  "template": { "type": "string", "enum": ["blank", "project", "meeting", "reading", "swot", "weekly", "sequence"], "description": "The sequence template creates an empty UML sequence diagram." }
                 }
               }
             }
           }
         },
-        "responses": { "201": { "description": "Created map" } }
+        "responses": {
+          "201": {
+            "description": "Created map",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MapResult" } } }
+          }
+        }
       }
     },
     "/v1/maps/{mapId}": {
       "parameters": [{ "name": "mapId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
       "get": {
-        "summary": "Read a map with all nodes",
-        "responses": { "200": { "description": "Map" }, "404": { "description": "Not found" } }
+        "summary": "Read a map with its nodes or UML sequence source",
+        "responses": {
+          "200": {
+            "description": "Map",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MapResult" } } }
+          },
+          "404": { "description": "Not found" }
+        }
       },
       "patch": {
-        "summary": "Update title, layout, theme, or folder",
+        "summary": "Update document metadata or replace UML sequence source",
         "requestBody": {
           "required": true,
           "content": {
@@ -200,14 +221,21 @@
                 "properties": {
                   "title": { "type": "string" },
                   "folderId": { "type": "string" },
-                  "layout": { "type": "string" },
-                  "theme": { "type": "string" }
+                  "layout": { "type": "string", "description": "Tree maps only." },
+                  "theme": { "type": "string" },
+                  "sequenceSource": { "type": "string", "description": "UML sequence diagrams only. Replaces the entire source verbatim, including incomplete drafts. Send an empty string to clear the source." }
                 }
               }
             }
           }
         },
-        "responses": { "200": { "description": "Updated map" } }
+        "responses": {
+          "200": {
+            "description": "Updated map",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MapResult" } } }
+          },
+          "400": { "description": "Invalid update or wrong document type" }
+        }
       },
       "delete": {
         "summary": "Trash or permanently delete a map",
@@ -300,7 +328,7 @@
     "/v1/maps/{mapId}/batch": {
       "parameters": [{ "name": "mapId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
       "post": {
-        "summary": "Apply up to 500 node operations and save once",
+        "summary": "Apply up to 500 node operations to a tree map and save once",
         "requestBody": {
           "required": true,
           "content": {
@@ -329,7 +357,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "format": { "type": "string", "enum": ["markdown", "opml", "json", "png", "pdf"] },
+                  "format": { "type": "string", "enum": ["markdown", "opml", "json", "png", "pdf"], "description": "UML sequence diagrams support JSON, PNG and PDF. PNG and PDF require valid source with at least one participant." },
                   "path": { "type": "string", "description": "Absolute path under the user's home or /tmp" },
                   "scale": { "type": "integer", "minimum": 1, "maximum": 3 }
                 },
@@ -338,7 +366,11 @@
             }
           }
         },
-        "responses": { "200": { "description": "Exported file" }, "403": { "description": "Path outside allowed roots" } }
+        "responses": {
+          "200": { "description": "Exported file" },
+          "400": { "description": "Invalid format, invalid sequence source, or sequence PNG too large to render" },
+          "403": { "description": "Path outside allowed roots" }
+        }
       }
     },
     "/v1/import": {
@@ -353,7 +385,7 @@
                 "properties": {
                   "path": { "type": "string" },
                   "folderId": { "type": "string", "format": "uuid" },
-                  "layout": { "type": "string" },
+                  "layout": { "type": "string", "description": "Tree maps only." },
                   "theme": { "type": "string" }
                 },
                 "required": ["path"]

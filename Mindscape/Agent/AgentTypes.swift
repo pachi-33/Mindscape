@@ -107,6 +107,7 @@ struct AgentMapDTO: Encodable {
     let updatedAt: Date
     let rootIds: [String]
     let nodes: [AgentNodeDTO]
+    let sequenceSource: String?
 
     init(map: MindMap, folderID: UUID?) {
         id = map.id.uuidString
@@ -118,6 +119,7 @@ struct AgentMapDTO: Encodable {
         updatedAt = map.updatedAt
         rootIds = map.rootIDs.map(\.uuidString)
         nodes = map.nodes.map(AgentNodeDTO.init)
+        sequenceSource = map.sequenceSource
     }
 }
 
@@ -129,6 +131,7 @@ struct AgentMapSummary: Encodable {
     let folderId: String?
     let updatedAt: Date
     let nodeCount: Int
+    let isSequence: Bool
 
     init(_ record: DocumentRecord) {
         id = record.id.uuidString
@@ -138,6 +141,7 @@ struct AgentMapSummary: Encodable {
         folderId = record.folderID?.uuidString
         updatedAt = record.updatedAt
         nodeCount = record.nodeCount
+        isSequence = record.isSequence
     }
 }
 
@@ -186,6 +190,22 @@ struct AgentUpdateMapBody: Decodable {
     let folderId: String?
     let layout: String?
     let theme: String?
+    let sequenceSource: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case title, folderId, layout, theme, sequenceSource
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        folderId = try container.decodeIfPresent(String.self, forKey: .folderId)
+        layout = try container.decodeIfPresent(String.self, forKey: .layout)
+        theme = try container.decodeIfPresent(String.self, forKey: .theme)
+        sequenceSource = container.contains(.sequenceSource)
+            ? try container.decode(String.self, forKey: .sequenceSource)
+            : nil
+    }
 }
 
 struct AgentAddNodeBody: Decodable {

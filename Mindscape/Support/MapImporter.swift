@@ -32,12 +32,13 @@ enum MapImporter {
         case "json":
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            guard var map = try? decoder.decode(MindMap.self, from: data), !map.nodes.isEmpty else {
+            guard var map = try? decoder.decode(MindMap.self, from: data),
+                  map.isSequence == map.nodes.isEmpty else {
                 throw ImportError.invalidJSON
             }
             map.id = UUID()
             map.updatedAt = Date()
-            map.themeID = themeID
+            if !map.isSequence { map.themeID = themeID }
             return map
         default:
             guard let text = String(data: data, encoding: .utf8) else { throw ImportError.unreadable }

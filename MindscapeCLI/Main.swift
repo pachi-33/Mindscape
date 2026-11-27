@@ -142,7 +142,7 @@ struct MindscapeCLI {
     private static func maps(_ tokens: [String], client: AgentClient, pretty: Bool) async throws {
         let parsed = parse(tokens)
         guard let action = parsed.positional.first else {
-            throw CLIError.usage("用法：mindscape map list|create|show|tree|rename|move|delete|export|import ...")
+            throw CLIError.usage("用法：mindscape map list|create|show|tree|set-sequence|rename|move|delete|export|import ...")
         }
         switch action {
         case "list":
@@ -172,6 +172,17 @@ struct MindscapeCLI {
             }
             let (data, _) = try await client.request(method: "GET", path: "v1/maps/\(parsed.positional[1])")
             try printTree(data)
+        case "set-sequence":
+            guard parsed.positional.count >= 2, let file = parsed.values["file"] else {
+                throw CLIError.usage("用法：mindscape map set-sequence <id> --file <UTF-8 源码文件>")
+            }
+            let path = NSString(string: file).expandingTildeInPath
+            let source = try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
+            try await emit(client.request(
+                method: "PATCH",
+                path: "v1/maps/\(parsed.positional[1])",
+                body: ["sequenceSource": source]
+            ), pretty: pretty)
         case "rename":
             guard parsed.positional.count >= 3 else {
                 throw CLIError.usage("用法：mindscape map rename <id> <title>")
@@ -335,6 +346,9 @@ struct MindscapeCLI {
               let roots = payload["rootIds"] as? [String] else {
             throw CLIError.usage("无法解析导图结构")
         }
+        if payload["sequenceSource"] is String {
+            throw CLIError.usage("UML 时序图请使用 mindscape map show <id> 读取 sequenceSource")
+        }
         let byParent = Dictionary(grouping: nodes) { ($0["parentId"] as? String) ?? "" }
         func walk(_ id: String, _ depth: Int) {
             guard let node = nodes.first(where: { ($0["id"] as? String) == id }) else { return }
@@ -393,7 +407,7 @@ struct MindscapeCLI {
 
     private static func printHelp() {
         print("""
-        mindscape — operate Mindscape mind maps from the command line
+        mindscape — operate Mindscape mind maps and sequence diagrams from the command line
 
         Usage:
           mindscape health
@@ -408,9 +422,10 @@ struct MindscapeCLI {
           mindscape folder delete <id>
 
           mindscape map list [--folder <id>] [--include-deleted]
-          mindscape map create <title> [--folder <id>] [--layout <name>] [--theme <id>] [--template blank|project|meeting|reading|swot|weekly]
+          mindscape map create <title> [--folder <id>] [--layout <name>] [--theme <id>] [--template blank|project|meeting|reading|swot|weekly|sequence]
           mindscape map show <id>
           mindscape map tree <id>
+          mindscape map set-sequence <id> --file <path>
           mindscape map rename <id> <title>
           mindscape map move <id> --folder <id>|--root
           mindscape map delete <id> [--permanent]

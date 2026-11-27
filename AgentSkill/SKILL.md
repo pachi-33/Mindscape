@@ -1,11 +1,11 @@
 ---
 name: mindscape
-description: Create, edit, and export Mindscape mind maps through the local OpenAPI gateway. Use when the user asks for a mind map, brainstorm, project plan, meeting notes, outline, or export.
+description: Create, edit, and export Mindscape mind maps and UML sequence diagrams through the local OpenAPI gateway. Use when the user asks for a mind map, sequence diagram, brainstorm, project plan, meeting notes, outline, or export.
 ---
 
 # Mindscape
 
-Mindscape is a local-first macOS mind map app. This skill lets you operate it through a local OpenAPI service owned by the running app.
+Mindscape is a local-first macOS app for mind maps and UML sequence diagrams. This skill lets you operate it through a local OpenAPI service owned by the running app.
 
 ## Prerequisites
 
@@ -17,20 +17,14 @@ Prefer the `mindscape` CLI. It starts the gateway on demand and handles the toke
 mindscape health
 ```
 
-If `mindscape` is not installed, read the gateway descriptor:
-
-```bash
-cat "$HOME/Library/Application Support/Mindscape/agent-gateway.json"
-```
-
-It contains `url` and `token`. Never print the token in your answer or write it to a file.
+If `mindscape` is unavailable, follow the fallback below. The gateway descriptor contains a session token. Keep it out of output and files.
 
 ## Discover before writing
 
 1. `GET /v1/health`
 2. `GET /v1/folders`
 3. `GET /v1/maps` — choose by title, keep the `id`
-4. `GET /v1/maps/{id}` — read `rootIds` and node IDs
+4. `GET /v1/maps/{id}` — read `sequenceSource` for a sequence diagram, or `rootIds` and node IDs for a tree
 
 Use IDs, not titles, for every subsequent mutation. Save returned IDs in your working notes.
 
@@ -53,6 +47,7 @@ The gateway is stopped by default and after 10 idle minutes. `mindscape` starts 
 | List folders / maps | `GET /v1/folders` · `GET /v1/maps` |
 | Create folder / map | `POST /v1/folders` · `POST /v1/maps` |
 | Read full map (IDs) | `GET /v1/maps/{mapId}` |
+| Replace UML sequence source | `PATCH /v1/maps/{mapId}` with `sequenceSource` |
 | Add / update / move / delete node | `POST .../nodes` · `PATCH/DELETE .../nodes/{nodeId}` · `POST .../nodes/{nodeId}/move` |
 | Bulk create/edit | `POST /v1/maps/{mapId}/batch` (≤ 500 ops) |
 | Export | `POST /v1/maps/{mapId}/export` |
@@ -114,6 +109,27 @@ Content-Type: application/json
 - `PATCH /v1/maps/<map-id>` changes title, layout, theme, or folder.
 - `POST /v1/maps/<map-id>/nodes/<node-id>/move` moves a node; the gateway rejects cycles.
 
+### Draw a UML sequence diagram
+
+```bash
+mindscape map create "请求与响应" --template sequence
+mindscape map set-sequence <map-id> --file ./sequence.txt
+mindscape map show <map-id>
+```
+
+For the raw API, create with `{"title":"请求与响应","template":"sequence"}`. Use the returned ID to replace the full source:
+
+```http
+PATCH /v1/maps/<map-id>
+Content-Type: application/json
+
+{"sequenceSource":"participant A as Client\nparticipant B as Server\nA->>B: Request\nB-->>A: Response\n"}
+```
+
+The source uses `participant A as Client` to declare a lifeline. Write synchronous messages as `A->>B: Request`, asynchronous messages as `A-)B: Send`, and returns as `B-->>A: Response`. Self-calls use the same participant ID at each end. The editor also supports `Note over A,B: Text`, `activate/deactivate A`, and nested `loop`, `opt`, `alt/else`, and `par/and` regions closed by `end`.
+
+`sequenceSource` is returned even for an empty diagram. The gateway saves drafts as supplied so you can build up the same document over repeated writes. Use `""` for an empty diagram. Node endpoints, node batches, root text, and tree layouts apply to tree maps.
+
 ### Export
 
 ```http
@@ -123,7 +139,7 @@ Content-Type: application/json
 {"format":"markdown","path":"~/Downloads/q4-plan.md"}
 ```
 
-Formats: `markdown`, `opml`, `json`, `png`, `pdf`. PNG accepts `scale` 1–3. The path must be under the user's home directory or `/tmp`, and must end with the matching extension.
+Tree maps support `markdown`, `opml`, `json`, `png`, and `pdf`. Sequence diagrams support `json`, `png`, and `pdf`. JSON retains drafts for editing. PNG and PDF require valid source with at least one participant. PNG accepts `scale` 1–3. The path must be under the user's home directory or `/tmp`, and must end with the matching extension.
 
 ### Import
 
@@ -134,14 +150,18 @@ Content-Type: application/json
 {"path":"~/Downloads/plan.opml","folderId":"<folder-id>"}
 ```
 
-Supports Markdown, OPML, and Mindscape JSON.
+Supports Markdown, OPML, and Mindscape JSON. Importing a sequence diagram JSON creates a new document with the saved source.
 
 ## If the CLI is unavailable
 
-Read `~/Library/Application Support/Mindscape/agent-gateway.json` and use the `url` and `token` fields:
+Extract the URL and token without printing the descriptor:
 
 ```bash
-curl -s "$URL/v1/health" -H "Authorization: Bearer $TOKEN"
+mindscape_gateway_file="$HOME/Library/Application Support/Mindscape/agent-gateway.json"
+mindscape_gateway_url=$(jq -er .url "$mindscape_gateway_file")
+mindscape_gateway_token=$(jq -er .token "$mindscape_gateway_file")
+curl -s "$mindscape_gateway_url/v1/health" -H "Authorization: Bearer $mindscape_gateway_token"
+unset mindscape_gateway_token
 ```
 
 Only call `127.0.0.1` / `localhost`; do not send an `Origin` header. If the file is missing, ask the user to enable **Settings → AI Agent**, then retry once.
@@ -162,6 +182,8 @@ mindscape folder list
 mindscape folder create "项目"
 mindscape map list
 mindscape map create "项目规划" --folder <id>
+mindscape map create "请求与响应" --template sequence
+mindscape map set-sequence <map-id> --file ./sequence.txt
 mindscape map show <map-id>
 mindscape node add <map-id> --parent <node-id> --text "目标"
 mindscape node set <map-id> <node-id> --text "新标题" --note "备注"
@@ -171,4 +193,4 @@ mindscape map export <map-id> --format md --out ~/Downloads/plan.md
 mindscape openapi
 ```
 
-Full API: `GET /openapi.json` or `mindscape openapi`.
+Full API: `GET /v1/openapi.json` or `mindscape openapi`.

@@ -2,6 +2,7 @@ import Foundation
 
 enum MapTemplate: String, CaseIterable, Identifiable, Sendable {
     case blank
+    case sequence
     case project
     case meeting
     case reading
@@ -13,6 +14,7 @@ enum MapTemplate: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .blank: return String(localized: "空白导图")
+        case .sequence: return String(localized: "UML 时序图")
         case .project: return String(localized: "项目规划")
         case .meeting: return String(localized: "会议纪要")
         case .reading: return String(localized: "读书笔记")
@@ -24,6 +26,7 @@ enum MapTemplate: String, CaseIterable, Identifiable, Sendable {
     var subtitle: String {
         switch self {
         case .blank: return String(localized: "从中心主题开始")
+        case .sequence: return String(localized: "添加生命线与消息")
         case .project: return String(localized: "目标、里程碑与风险")
         case .meeting: return String(localized: "议题、结论与待办")
         case .reading: return String(localized: "观点、金句与联想")
@@ -35,6 +38,7 @@ enum MapTemplate: String, CaseIterable, Identifiable, Sendable {
     var symbol: String {
         switch self {
         case .blank: return "circle.dashed"
+        case .sequence: return "arrow.left.arrow.right"
         case .project: return "flag.checkered"
         case .meeting: return "person.2"
         case .reading: return "book"
@@ -57,6 +61,8 @@ enum MapTemplate: String, CaseIterable, Identifiable, Sendable {
         case .blank:
             let root = MindNode(parentID: nil, text: "中心主题", order: 0)
             return MindMap(title: "未命名导图", nodes: [root], layout: layout, themeID: themeID)
+        case .sequence:
+            return MindMap(title: String(localized: "未命名时序图"), layout: layout, themeID: themeID, sequenceSource: "")
         case .project:
             return build(
                 title: "项目规划",

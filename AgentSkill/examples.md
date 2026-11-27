@@ -34,8 +34,33 @@ mindscape node set <map> <node> --text "更新后的标题"
 mindscape map export <map> --format pdf --out ~/Desktop/plan.pdf
 ```
 
+## UML sequence diagram
+
+```bash
+mindscape map create "请求与响应" --template sequence
+# use the returned document ID
+mindscape map set-sequence <id> --file ./sequence.txt
+mindscape map show <id>
+mindscape map export <id> --format pdf --out ~/Downloads/sequence.pdf
+mindscape map export <id> --format json --out ~/Downloads/sequence.json
+```
+
+`sequence.txt`:
+
+```text
+participant C as Client
+participant S as Server
+C->>S: Request
+activate S
+S-->>C: Response
+deactivate S
+```
+
 ## Failure handling
 
+- `400 wrong_document_type`: use `sequenceSource` for UML sequence diagrams and node operations for tree maps.
+- `400 invalid_sequence_source`: fix the reported source line or export the draft as JSON.
+- `400 image_too_large`: lower the PNG scale or export PDF.
 - `401`: read the gateway file again; the token may have rotated.
 - `403`: the app is not accepting agent requests, or the request did not come from localhost.
 - `409`: cycle/self-move or deleting the last remaining node.

@@ -35,6 +35,7 @@ final class MapEditor {
     private var undoStack: [MindMap] = []
     private var redoStack: [MindMap] = []
     private var saveTask: Task<Void, Never>?
+    private var hasPendingSequenceSave = false
     private var lastAutoSnapshot = Date.distantPast
     private var lastTextEditID: UUID?
     private var lastTextEditAt = Date.distantPast
@@ -126,6 +127,7 @@ final class MapEditor {
     /// 新建一个头部节点。`position` 只对自由布局生效，其它布局会按顺序堆叠。
     @discardableResult
     func addRoot(at position: CGPoint? = nil) -> UUID? {
+        guard !map.isSequence else { return nil }
         let wasFollowing = map.nodes.isEmpty || titleFollowsPrimaryHead
         var node = MindNode(
             parentID: nil,
@@ -1002,6 +1004,29 @@ final class MapEditor {
 
     // MARK: - Document settings
 
+    var sequenceDiagram: SequenceDiagram {
+        get throws {
+            guard let source = map.sequenceSource else { throw SequenceDiagram.EditError.unavailable }
+            return try SequenceDiagram.parse(source)
+        }
+    }
+
+    @discardableResult
+    func editSequence(_ edit: SequenceDiagram.Edit) throws -> SequenceSelection? {
+        let previous = try sequenceDiagram
+        let update = try previous.applying(edit)
+        let updatedSource = update.diagram.serializedSource
+        if !previous.serializedSource.utf8.elementsEqual(updatedSource.utf8) {
+            setSequenceSource(updatedSource)
+        }
+        return update.selection
+    }
+
+    func setSequenceSource(_ source: String) {
+        guard let previous = map.sequenceSource, !previous.utf8.elementsEqual(source.utf8) else { return }
+        mutate { $0.sequenceSource = source }
+    }
+
     func setTitle(_ title: String) {
         guard map.title != title else { return }
         map.title = title
@@ -1011,7 +1036,7 @@ final class MapEditor {
     }
 
     func setLayout(_ layout: MapLayout) {
-        guard map.layout != layout else { return }
+        guard !map.isSequence, map.layout != layout else { return }
         mutate { map in
             map.layout = layout
             Self.assignMissingMindMapSides(in: &map)
@@ -1023,7 +1048,7 @@ final class MapEditor {
     /// 切到「记住布局」时先把当前视觉上的左右侧固化下来；
     /// 切到「平衡布局」时清掉记录，之后每次布局都会自动平衡。
     func setMindMapLayoutMode(_ mode: MindMapLayoutMode) {
-        guard map.resolvedMindMapLayoutMode != mode else { return }
+        guard !map.isSequence, map.resolvedMindMapLayoutMode != mode else { return }
         let sides = mindMapSideSnapshot()
         mutate { map in
             map.mindMapLayoutMode = mode
@@ -1063,7 +1088,7 @@ final class MapEditor {
     /// 记住布局下，把还没有显式左右侧的一级分支按当前视觉位置补记录。
     /// 旧数据、导入的数据、粘贴进来的分支都靠这一步保持「看起来没变」。
     private static func assignMissingMindMapSides(in map: inout MindMap) {
-        guard map.layout == .mindMap,
+        guard !map.isSequence, map.layout == .mindMap,
               map.resolvedMindMapLayoutMode == .remember,
               !map.nodes.isEmpty else { return }
         let layout = LayoutEngine.layout(map)
@@ -1296,14 +1321,17 @@ final class MapEditor {
         map.title = map.primaryHeadText
     }
 
-    /// 撤销栈同时按「步数」和「节点总数」限制：大图连续编辑时，
-    /// 150 份完整快照可能占掉几百 MB；节点总数超预算就先丢最旧的快照。
+    /// 撤销栈按步数、节点总数和源码字节数限制，超出预算时先丢最旧的快照。
     private func trim(_ stack: inout [MindMap]) {
         let maxSteps = 150
         let maxNodes = 40_000
+        let maxSourceBytes = 4 * 1024 * 1024
         var totalNodes = stack.reduce(0) { $0 + $1.nodes.count }
-        while stack.count > maxSteps || (totalNodes > maxNodes && stack.count > 1) {
-            totalNodes -= stack.removeFirst().nodes.count
+        var totalSourceBytes = stack.reduce(0) { $0 + ($1.sequenceSource?.utf8.count ?? 0) }
+        while stack.count > maxSteps || ((totalNodes > maxNodes || totalSourceBytes > maxSourceBytes) && stack.count > 1) {
+            let removed = stack.removeFirst()
+            totalNodes -= removed.nodes.count
+            totalSourceBytes -= removed.sequenceSource?.utf8.count ?? 0
         }
     }
 
@@ -1318,6 +1346,7 @@ final class MapEditor {
     // MARK: - Saving
 
     func scheduleSave() {
+        hasPendingSequenceSave = map.isSequence
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 600_000_000)
@@ -1338,8 +1367,20 @@ final class MapEditor {
         saveTask?.cancel()
         saveTask = nil
         try store.save(map)
+        hasPendingSequenceSave = false
         maybeAutoSnapshot()
         onSaved?()
+    }
+
+    func flushPendingSequenceSave() throws {
+        guard hasPendingSequenceSave else { return }
+        try saveImmediately()
+    }
+
+    func cancelPendingSave() {
+        saveTask?.cancel()
+        saveTask = nil
+        hasPendingSequenceSave = false
     }
 
     private func maybeAutoSnapshot() {
@@ -1386,7 +1427,7 @@ final class MapEditor {
     }
 
     func restore(snapshot: SnapshotRecord) {
-        guard let restored = try? store.loadSnapshot(snapshot.id) else { return }
+        guard let restored = try? store.loadSnapshot(snapshot.id), restored.isSequence == map.isSequence else { return }
         try? store.addSnapshot(map, name: String(localized: "恢复前"), kind: "manual")
         undoStack.append(map)
         trim(&undoStack)

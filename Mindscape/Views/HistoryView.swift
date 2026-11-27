@@ -109,9 +109,15 @@ struct HistoryView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        Text("\(RelativeDate.full(snapshot.createdAt)) · \(snapshot.nodeCount) 个节点")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
+                        Group {
+                            if snapshot.isSequence {
+                                Text(RelativeDate.full(snapshot.createdAt))
+                            } else {
+                                Text("\(RelativeDate.full(snapshot.createdAt)) · \(snapshot.nodeCount) 个节点")
+                            }
+                        }
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
                     }
 
                     Spacer()

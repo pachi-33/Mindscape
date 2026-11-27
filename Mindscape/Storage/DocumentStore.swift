@@ -20,6 +20,7 @@ struct DocumentRecord: Identifiable, Equatable, Sendable {
     var folderID: UUID?
     var nodeCount: Int
     var preview: String
+    var isSequence = false
 }
 
 struct SnapshotRecord: Identifiable, Equatable, Sendable {
@@ -29,6 +30,7 @@ struct SnapshotRecord: Identifiable, Equatable, Sendable {
     var kind: String
     var createdAt: Date
     var nodeCount: Int
+    var isSequence = false
 
     var isAuto: Bool { kind == "auto" }
 }
@@ -153,6 +155,24 @@ final class DocumentStore {
             PRAGMA user_version = 2;
             """)
         }
+
+        if version < 3 {
+            try db.execute("BEGIN IMMEDIATE;")
+            do {
+                let currentVersion = try db.query("PRAGMA user_version;").first?.int("user_version") ?? 0
+                if currentVersion < 3 {
+                    try db.execute("""
+                    ALTER TABLE documents ADD COLUMN is_sequence INTEGER NOT NULL DEFAULT 0;
+                    ALTER TABLE snapshots ADD COLUMN is_sequence INTEGER NOT NULL DEFAULT 0;
+                    PRAGMA user_version = 3;
+                    """)
+                }
+                try db.execute("COMMIT;")
+            } catch {
+                try? db.execute("ROLLBACK;")
+                throw error
+            }
+        }
     }
 
     // MARK: - Documents
@@ -160,7 +180,7 @@ final class DocumentStore {
     func list(includeDeleted: Bool = false) throws -> [DocumentRecord] {
         let filter = includeDeleted ? "" : "WHERE deleted_at IS NULL"
         let rows = try db.query("""
-        SELECT id, title, layout, theme, starred, created_at, updated_at, deleted_at, folder_id, node_count, preview
+        SELECT id, title, layout, theme, starred, created_at, updated_at, deleted_at, folder_id, node_count, preview, is_sequence
         FROM documents
         \(filter)
         ORDER BY updated_at DESC
@@ -175,15 +195,24 @@ final class DocumentStore {
         return try decoder.decode(MindMap.self, from: data)
     }
 
-    func save(_ map: MindMap, folderID: UUID? = nil) throws {
+    func save(_ map: MindMap, folderID: UUID? = nil, replaceFolder: Bool = false) throws {
         let data = try encoder.encode(map)
         guard let json = String(data: data, encoding: .utf8) else { return }
-        let preview = map.nodes.prefix(24).map(\.text).joined(separator: " · ")
+        let preview: String
+        if let source = map.sequenceSource {
+            preview = source.prefix(1_024).split(whereSeparator: \.isNewline)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " · ")
+        } else {
+            preview = map.nodes.prefix(24).map(\.text).joined(separator: " · ")
+        }
+        let folderUpdate = replaceFolder ? "excluded.folder_id" : "COALESCE(documents.folder_id, excluded.folder_id)"
 
         try db.run("""
         INSERT INTO documents
-            (id, title, content, layout, theme, starred, created_at, updated_at, deleted_at, node_count, preview, folder_id)
-        VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, ?, ?)
+            (id, title, content, layout, theme, starred, created_at, updated_at, deleted_at, node_count, preview, folder_id, is_sequence)
+        VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             content = excluded.content,
@@ -192,7 +221,8 @@ final class DocumentStore {
             updated_at = excluded.updated_at,
             node_count = excluded.node_count,
             preview = excluded.preview,
-            folder_id = COALESCE(documents.folder_id, excluded.folder_id)
+            folder_id = \(folderUpdate),
+            is_sequence = excluded.is_sequence
         """, [
             .text(map.id.uuidString),
             .text(map.title),
@@ -203,7 +233,8 @@ final class DocumentStore {
             .double(map.updatedAt.timeIntervalSince1970),
             .int(Int64(map.nodes.count)),
             .text(preview),
-            folderID.map { .text($0.uuidString) } ?? .null
+            folderID.map { .text($0.uuidString) } ?? .null,
+            .int(map.isSequence ? 1 : 0)
         ])
     }
 
@@ -312,7 +343,7 @@ final class DocumentStore {
 
     func snapshots(for documentID: UUID) throws -> [SnapshotRecord] {
         let rows = try db.query("""
-        SELECT id, document_id, name, kind, created_at, node_count
+        SELECT id, document_id, name, kind, created_at, node_count, is_sequence
         FROM snapshots WHERE document_id = ?
         ORDER BY created_at DESC
         LIMIT 60
@@ -326,7 +357,8 @@ final class DocumentStore {
                 name: row.string("name") ?? "快照",
                 kind: row.string("kind") ?? "manual",
                 createdAt: Date(timeIntervalSince1970: row.double("created_at") ?? 0),
-                nodeCount: row.int("node_count") ?? 0
+                nodeCount: row.int("node_count") ?? 0,
+                isSequence: row.bool("is_sequence")
             )
         }
     }
@@ -335,8 +367,8 @@ final class DocumentStore {
         let data = try encoder.encode(map)
         guard let json = String(data: data, encoding: .utf8) else { return }
         try db.run("""
-        INSERT INTO snapshots (id, document_id, name, kind, content, created_at, node_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO snapshots (id, document_id, name, kind, content, created_at, node_count, is_sequence)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, [
             .text(UUID().uuidString),
             .text(map.id.uuidString),
@@ -344,7 +376,8 @@ final class DocumentStore {
             .text(kind),
             .text(json),
             .double(Date().timeIntervalSince1970),
-            .int(Int64(map.nodes.count))
+            .int(Int64(map.nodes.count)),
+            .int(map.isSequence ? 1 : 0)
         ])
 
         if kind == "auto" {
@@ -389,7 +422,8 @@ final class DocumentStore {
             deletedAt: row.double("deleted_at").map { Date(timeIntervalSince1970: $0) },
             folderID: row.string("folder_id").flatMap(UUID.init(uuidString:)),
             nodeCount: row.int("node_count") ?? 1,
-            preview: row.string("preview") ?? ""
+            preview: row.string("preview") ?? "",
+            isSequence: row.bool("is_sequence")
         )
     }
 }
