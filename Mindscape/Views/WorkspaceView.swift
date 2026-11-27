@@ -110,9 +110,7 @@ struct WorkspaceView: View {
             showExport = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .mindscapeToggleInspector)) { _ in
-            withAnimation(.easeOut(duration: 0.16)) {
-                showInspector.toggle()
-            }
+            toggleInspector()
         }
         .onReceive(NotificationCenter.default.publisher(for: .mindscapeFind)) { _ in
             openSearch()
@@ -123,10 +121,6 @@ struct WorkspaceView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mindscapePresent)) { _ in
             PresentationWindowController.shared.present(map: editor.map)
         }
-        .background(
-            InspectorTitlebarToggle()
-                .frame(width: 1, height: 1)
-        )
         .navigationTitle("")
         .onReceive(NotificationCenter.default.publisher(for: .mindscapeFirstRunPromptsWillPresent)) { _ in
             tipsAutoShowTask?.cancel()
@@ -282,6 +276,12 @@ struct WorkspaceView: View {
         .background(.regularMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
         .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+    }
+
+    private func toggleInspector() {
+        withAnimation(.easeOut(duration: 0.16)) {
+            showInspector.toggle()
+        }
     }
 
     private func toggleOutline() {
@@ -462,6 +462,35 @@ struct WorkspaceView: View {
                     showTips = false
                 }
             }
+        }
+
+#if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            ToolbarSpacer(.flexible, placement: .primaryAction)
+        }
+#endif
+        inspectorToolbarItem
+    }
+
+    @ToolbarContentBuilder
+    private var inspectorToolbarItem: some ToolbarContent {
+#if compiler(>=6.4)
+        if #available(macOS 26.1, *) {
+            inspectorButtonItem.visibilityPriority(.high)
+        } else {
+            inspectorButtonItem
+        }
+#else
+        inspectorButtonItem
+#endif
+    }
+
+    private var inspectorButtonItem: some ToolbarContent {
+        ToolbarItem(id: "inspector-toggle", placement: .primaryAction) {
+            Button(action: toggleInspector) {
+                Label("显示 / 隐藏属性面板", systemImage: "sidebar.right")
+            }
+            .help("显示 / 隐藏属性面板（⌥⌘I）")
         }
     }
 }
