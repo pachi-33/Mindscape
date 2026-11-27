@@ -4,6 +4,22 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>Mindscape Updates</title>
     <item>
+      <title>Mindscape 0.8.0-beta.7</title>
+      <link>https://github.com/pachi-33/Mindscape/releases/tag/v0.8.0-beta.7</link>
+      <description sparkle:format="plain-text">新增 UML 时序图。打开「新建导图 → UML 时序图」，在画布上点选生命线绘制消息，在属性面板添加备注、激活条、分支和循环。时序图沿用导图主题，支持撤销、保存重开，以及 PDF、PNG 和可继续编辑的 JSON 导出。
+
+[查看 SGLang PP4 调度示例](https://github.com/pachi-33/Mindscape/tree/v0.8.0-beta.7/docs/examples/sglang-pp4)
+
+支持 Apple Silicon 和 Intel Mac，要求 macOS 14 或更高版本。已有 beta 用户可在应用内检查更新。手动安装请下载 DMG。此预发布版采用 ad-hoc 签名，未经 Apple 公证。
+</description>
+      <pubDate>Fri, 27 Nov 2026 13:27:21 +0000</pubDate>
+      <sparkle:version>19</sparkle:version>
+      <sparkle:shortVersionString>0.8.0-beta.7</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:channel>beta</sparkle:channel>
+      <enclosure url="https://github.com/pachi-33/Mindscape/releases/download/v0.8.0-beta.7/Mindscape-0.8.0-beta.7.zip" length="6261228" type="application/octet-stream" sparkle:edSignature="4q8Rj/mnF64ALNuDUCjBq+iCCp6wsO0UNK7JkB3Y9QYUlnk50cfle1f4oCc/4Cm34qdXacWwxsrLsIoOq8q6DQ=="></enclosure>
+    </item>
+    <item>
       <title>Mindscape 0.8.0-beta.6</title>
       <link>https://github.com/pachi-33/Mindscape/releases/tag/v0.8.0-beta.6</link>
       <description sparkle:format="plain-text">修复右上角属性面板按钮在完整窗口中被标题栏遮挡、鼠标无法点击的问题。按钮现在位于系统工具栏，点击可显示或隐藏属性面板。
@@ -93,6 +109,6 @@ DMG 用于手动安装，ZIP 用于应用内更新。
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: tTwLXzU+j7DXD9/6lkIYrb71kLGhK2kucJIS7zgWQofZcfjPufYhAIRGg34kSj4KlF6TtAK58Btr4nExlmvBBw==
-length: 7682
+edSignature: jsa5JYG58bg0yStgOOOYXe8WQHy/9gxbpJNL4wcVqQZtfN4aRab+lzz6E7crZFasQdfTmHoumpdW0vOJqzMaBA==
+length: 9093
 -->
