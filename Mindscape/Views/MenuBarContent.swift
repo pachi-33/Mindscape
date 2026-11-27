@@ -22,6 +22,7 @@ struct MenuBarContent: View {
                 Button(template.title) {
                     create(template)
                 }
+                .accessibilityIdentifier("newDocument.\(template.rawValue)")
             }
         }
 

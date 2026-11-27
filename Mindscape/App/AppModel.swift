@@ -254,6 +254,7 @@ final class AppModel {
     /// Agent 通过本地服务改完数据后刷新界面；不触发旧 editor 的自动保存，避免覆盖外部修改。
     func reloadAfterExternalChange(documentID: UUID?) {
         if let documentID, selectedDocumentID == documentID {
+            editor?.cancelPendingSave()
             editor = nil
             if var map = try? store.load(id: documentID) {
                 map.normalizeTheme(isDark: isDarkAppearance)
@@ -308,7 +309,9 @@ final class AppModel {
         let themeID = defaultThemeID
         var map = template.makeMap(themeID: themeID, layout: layout)
         // 标题默认跟随第一个头部节点；用户之后手动改名才会脱离跟随
-        map.title = map.primaryHeadText
+        if !map.isSequence {
+            map.title = map.primaryHeadText
+        }
         map.normalizeTheme(isDark: isDarkAppearance)
         map.createdAt = Date()
         map.updatedAt = Date()
@@ -569,8 +572,7 @@ final class AppModel {
     // MARK: - Export
 
     func export(document id: UUID, format: ExportFormat) {
-        guard let map = try? store.load(id: id) else { return }
-        let layout = LayoutEngine.layout(map)
-        _ = ExportService.save(map: map, layout: layout, format: format)
+        guard let map = editor?.map.id == id ? editor?.map : try? store.load(id: id) else { return }
+        _ = ExportService.save(map: map, format: format)
     }
 }

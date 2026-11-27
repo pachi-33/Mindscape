@@ -61,6 +61,7 @@ enum ExportFormat: String, CaseIterable, Identifiable {
     }
 
     var supportsScale: Bool { self == .png }
+    var supportsSequence: Bool { self == .png || self == .pdf || self == .json }
 }
 
 @MainActor
@@ -70,7 +71,7 @@ enum ExportService {
     /// 弹出保存面板并写入文件，返回是否成功保存。
     static func save(
         map: MindMap,
-        layout: LayoutResult,
+        layout: LayoutResult? = nil,
         format: ExportFormat,
         scale: CGFloat = 2
     ) -> Bool {
@@ -93,15 +94,30 @@ enum ExportService {
 
     static func makeData(
         map: MindMap,
-        layout: LayoutResult,
+        layout: LayoutResult? = nil,
         format: ExportFormat,
         scale: CGFloat = 2
     ) throws -> Data {
+        if map.isSequence, !format.supportsSequence {
+            throw ExportError.unsupportedSequenceFormat
+        }
         switch format {
         case .png:
-            return try pngData(map: map, layout: layout, scale: scale)
+            let view = try makeExportView(map: map, layout: layout)
+            if map.isSequence {
+                let width = ceil(view.bounds.width * scale)
+                let height = ceil(view.bounds.height * scale)
+                // Reject excessive raster allocations before drawing.
+                guard width > 0, height > 0, width <= 32_768, height <= 32_768,
+                      width * height <= 32_000_000 else {
+                    throw ExportError.sequenceImageTooLarge
+                }
+                return try sequencePNGData(view: view, width: Int(width), height: Int(height))
+            }
+            return try pngData(view: view, scale: scale)
         case .pdf:
-            return try pdfData(map: map, layout: layout)
+            let view = try makeExportView(map: map, layout: layout)
+            return view.dataWithPDF(inside: view.bounds)
         case .markdown:
             return Data(markdown(map: map).utf8)
         case .opml:
@@ -117,7 +133,7 @@ enum ExportService {
     /// 生成用于系统分享的临时文件。
     static func temporaryURL(
         map: MindMap,
-        layout: LayoutResult,
+        layout: LayoutResult? = nil,
         format: ExportFormat,
         scale: CGFloat = 2
     ) throws -> URL {
@@ -146,8 +162,22 @@ enum ExportService {
 
     // MARK: - Rendering
 
-    private static func makeExportView(map: MindMap, layout: LayoutResult) -> ExportCanvasView {
+    private static func makeExportView(map: MindMap, layout: LayoutResult?) throws -> NSView {
         let theme = MapTheme.byID(map.themeID)
+        if let source = map.sequenceSource {
+            let diagram: SequenceDiagram
+            do {
+                diagram = try SequenceDiagram.parse(source)
+            } catch {
+                throw ExportError.invalidSequenceSource(error.localizedDescription)
+            }
+            guard !diagram.participants.isEmpty else {
+                throw ExportError.invalidSequenceSource(String(localized: "添加至少一个参与者后才能导出时序图。"))
+            }
+            return SequenceDiagramCanvas(diagram: diagram, theme: theme)
+        }
+
+        let layout = layout ?? LayoutEngine.layout(map)
         let size = CGSize(
             width: max(layout.bounds.width, 420),
             height: max(layout.bounds.height, 320)
@@ -157,13 +187,7 @@ enum ExportService {
         return view
     }
 
-    private static func pdfData(map: MindMap, layout: LayoutResult) throws -> Data {
-        let view = makeExportView(map: map, layout: layout)
-        return view.dataWithPDF(inside: view.bounds)
-    }
-
-    private static func pngData(map: MindMap, layout: LayoutResult, scale: CGFloat) throws -> Data {
-        let view = makeExportView(map: map, layout: layout)
+    private static func pngData(view: NSView, scale: CGFloat) throws -> Data {
         let pdf = view.dataWithPDF(inside: view.bounds)
         guard let image = NSImage(data: pdf) else {
             throw ExportError.renderFailed
@@ -196,6 +220,28 @@ enum ExportService {
         NSGraphicsContext.restoreGraphicsState()
 
         guard let data = representation.representation(using: .png, properties: [:]) else {
+            throw ExportError.renderFailed
+        }
+        return data
+    }
+
+    private static func sequencePNGData(view: NSView, width: Int, height: Int) throws -> Data {
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: colorSpace,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            throw ExportError.renderFailed
+        }
+        context.translateBy(x: 0, y: CGFloat(height))
+        context.scaleBy(x: CGFloat(width) / view.bounds.width, y: -CGFloat(height) / view.bounds.height)
+
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
+        view.draw(view.bounds)
+
+        guard let image = context.makeImage(),
+              let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
             throw ExportError.renderFailed
         }
         return data
@@ -288,8 +334,22 @@ enum ExportService {
 
 enum ExportError: LocalizedError {
     case renderFailed
+    case unsupportedSequenceFormat
+    case invalidSequenceSource(String)
+    case sequenceImageTooLarge
 
-    var errorDescription: String? { String(localized: "生成导出文件失败") }
+    var errorDescription: String? {
+        switch self {
+        case .renderFailed:
+            return String(localized: "生成导出文件失败")
+        case .unsupportedSequenceFormat:
+            return String(localized: "UML 时序图支持 JSON、PNG 和 PDF 导出。")
+        case .invalidSequenceSource(let message):
+            return message
+        case .sequenceImageTooLarge:
+            return String(localized: "时序图的 PNG 尺寸过大。请降低清晰度或导出 PDF。")
+        }
+    }
 }
 
 final class ExportCanvasView: NSView {

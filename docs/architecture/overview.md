@@ -54,6 +54,7 @@ Agent 服务通过本机 HTTP 接收请求，在主线程的 `AgentService` 中�
 | 导图模型与编辑 | [导图模型与编辑](editor.md) | [导图编辑](../../openspec/specs/mind-map-editing/spec.md) |
 | 画布与布局 | [画布与布局](canvas.md) | [画布交互](../../openspec/specs/canvas-interaction/spec.md) |
 | 工作区与演示 | [工作区与演示](workspace-presentation.md) | [工作区与演示](../../openspec/specs/workspace-presentation/spec.md) |
+| UML 时序图 | [图形编辑与绘图设计](../../openspec/changes/archive/2026-11-27-add-uml-sequence-diagrams/design.md) | [时序图规格](../../openspec/specs/uml-sequence-diagrams/spec.md) |
 | Agent 和 CLI | [Agent 网关与 CLI](agent-gateway.md) | [Agent 网关](../../openspec/specs/agent-gateway/spec.md) |
 | 导入导出 | [导入导出](import-export.md) | [导入导出](../../openspec/specs/import-export/spec.md) |
 

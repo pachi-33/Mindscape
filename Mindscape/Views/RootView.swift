@@ -13,8 +13,15 @@ struct RootView: View {
         } detail: {
             Group {
                 if let editor = app.editor {
-                    WorkspaceView(editor: editor)
-                        .id(editor.map.id)
+                    Group {
+                        if editor.map.isSequence {
+                            SequenceWorkspaceView(editor: editor)
+                                .onAppear { app.activeCanvas = nil }
+                        } else {
+                            WorkspaceView(editor: editor)
+                        }
+                    }
+                    .id(editor.map.id)
                 } else {
                     EmptyStateView()
                 }

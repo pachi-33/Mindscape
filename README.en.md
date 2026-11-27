@@ -87,6 +87,10 @@ Sample data. Some screenshots were taken on earlier 0.5.x builds; shortcuts and 
 
 ## Features
 
+### UML sequence diagrams
+
+Choose **UML Sequence Diagram** when creating a document. Add lifelines on the canvas, choose the two ends of each message, and use the inspector to edit labels, notes, branches and loops. The canvas and exports use your document theme. Export JSON to edit it again or use PDF and PNG to share it. [SGLang PP4 worked example](docs/examples/sglang-pp4/README.md)
+
 ### Canvas
 
 - Infinite canvas: two-finger pan, pinch zoom, ⌘ + scroll, ⌘0 to fit

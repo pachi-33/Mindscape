@@ -14,7 +14,10 @@ struct MindMap: Identifiable, Codable, Equatable, Sendable {
     var darkThemeID: String?
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
+    /// 空字符串也是时序图。旧文档缺少该字段时，继续使用树形编辑器。
+    var sequenceSource: String?
 
+    var isSequence: Bool { sequenceSource != nil }
 
     /// 旧数据没有这个字段时，默认保留用户已经排好的左右分支。
     var resolvedMindMapLayoutMode: MindMapLayoutMode {

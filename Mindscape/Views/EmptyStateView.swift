@@ -111,6 +111,7 @@ struct TemplateCard: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("newDocument.\(template.rawValue)")
         .onHover { hovering = $0 }
     }
 }

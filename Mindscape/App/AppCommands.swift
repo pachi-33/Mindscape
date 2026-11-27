@@ -12,6 +12,8 @@ struct AppCommands: Commands {
         self._shortcuts = ObservedObject(wrappedValue: app.shortcuts)
     }
 
+    private var hasTreeEditor: Bool { app.editor?.map.isSequence == false }
+
     var body: some Commands {
         CommandGroup(after: .appInfo) {
             Button("检查更新…") {
@@ -26,13 +28,21 @@ struct AppCommands: Commands {
         }
 
         CommandGroup(replacing: .newItem) {
-            Button("新建导图") {
-                app.createDocument(template: .blank)
+            Menu("新建导图") {
+                Button("空白思维导图") {
+                    app.createDocument(template: .blank)
+                }
+                .accessibilityIdentifier("newDocument.blank")
+                .appShortcut(shortcuts.combo(for: .newDocument))
+
+                Button("UML 时序图") {
+                    app.createDocument(template: .sequence)
+                }
+                .accessibilityIdentifier("newDocument.sequence")
             }
             .disabled(app.updates.isPreparingApplication)
-            .appShortcut(shortcuts.combo(for: .newDocument))
 
-            Button("导入 Markdown / OPML…") {
+            Button("导入 Markdown / OPML / JSON…") {
                 app.importDocument()
             }
             .disabled(app.updates.isPreparingApplication)
@@ -54,15 +64,22 @@ struct AppCommands: Commands {
 
             Divider()
 
-            Button("查找节点…") {
+            Button {
                 NotificationCenter.default.post(name: .mindscapeFind, object: nil)
+            } label: {
+                if app.editor?.map.isSequence == true {
+                    Text("查找时序元素…")
+                } else {
+                    Text("查找节点…")
+                }
             }
+            .disabled(app.editor == nil)
             .appShortcut(shortcuts.combo(for: .findNode))
 
             Button("创建副本") {
                 app.editor?.duplicateSelection()
             }
-            .disabled(app.updates.isPreparingApplication)
+            .disabled(!hasTreeEditor || app.updates.isPreparingApplication)
             .appShortcut(shortcuts.combo(for: .duplicateNode))
         }
 
@@ -97,6 +114,7 @@ struct AppCommands: Commands {
             Button("显示 / 隐藏大纲") {
                 NotificationCenter.default.post(name: .mindscapeToggleOutline, object: nil)
             }
+            .disabled(app.editor == nil)
             .appShortcut(shortcuts.combo(for: .toggleOutline))
 
             Divider()
@@ -104,23 +122,25 @@ struct AppCommands: Commands {
             Button("专注当前分支") {
                 app.editor?.toggleFocus()
             }
+            .disabled(!hasTreeEditor)
             .appShortcut(shortcuts.combo(for: .focusMode))
 
             Button("缩放到分支") {
                 app.editor?.requestZoomToBranch()
             }
+            .disabled(!hasTreeEditor)
             .appShortcut(shortcuts.combo(for: .zoomToBranch))
 
             Button("折叠全部子分支") {
                 app.editor?.collapseAll()
             }
-            .disabled(app.updates.isPreparingApplication)
+            .disabled(!hasTreeEditor || app.updates.isPreparingApplication)
             .appShortcut(shortcuts.combo(for: .collapseAll))
 
             Button("展开全部") {
                 app.editor?.expandAll()
             }
-            .disabled(app.updates.isPreparingApplication)
+            .disabled(!hasTreeEditor || app.updates.isPreparingApplication)
             .appShortcut(shortcuts.combo(for: .expandAll))
 
             Divider()
@@ -128,6 +148,7 @@ struct AppCommands: Commands {
             Button("演示模式") {
                 NotificationCenter.default.post(name: .mindscapePresent, object: nil)
             }
+            .disabled(!hasTreeEditor)
             .appShortcut(shortcuts.combo(for: .presentMode))
 
             Divider()
@@ -135,21 +156,25 @@ struct AppCommands: Commands {
             Button("适配画布") {
                 app.editor?.requestFit()
             }
+            .disabled(app.editor == nil)
             .appShortcut(shortcuts.combo(for: .fitCanvas))
 
             Button("居中画布") {
                 app.editor?.requestCenterContent()
             }
+            .disabled(app.editor == nil)
             .appShortcut(shortcuts.combo(for: .centerCanvas))
 
             Button("放大") {
                 app.editor?.requestZoom(1.2)
             }
+            .disabled(app.editor == nil)
             .appShortcut(shortcuts.combo(for: .zoomIn))
 
             Button("缩小") {
                 app.editor?.requestZoom(0.83)
             }
+            .disabled(app.editor == nil)
             .appShortcut(shortcuts.combo(for: .zoomOut))
 
             Divider()
@@ -157,6 +182,7 @@ struct AppCommands: Commands {
             Button("显示 / 隐藏属性面板") {
                 NotificationCenter.default.post(name: .mindscapeToggleInspector, object: nil)
             }
+            .disabled(app.editor == nil)
             .appShortcut(shortcuts.combo(for: .toggleInspector))
 
             Divider()
@@ -176,6 +202,7 @@ struct AppCommands: Commands {
                     }
                 }
             }
+            .disabled(!hasTreeEditor)
 
             Menu("主题") {
                 ForEach(MapTheme.all.filter {
@@ -186,6 +213,7 @@ struct AppCommands: Commands {
                     }
                 }
             }
+            .disabled(app.editor == nil)
 
             Divider()
 

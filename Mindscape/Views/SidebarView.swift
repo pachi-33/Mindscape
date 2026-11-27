@@ -103,12 +103,13 @@ struct SidebarView: View {
                     } label: {
                         Label(template.title, systemImage: template.symbol)
                     }
+                    .accessibilityIdentifier("newDocument.\(template.rawValue)")
                 }
                 Divider()
                 Button {
                     app.importDocument()
                 } label: {
-                    Label("导入 Markdown / OPML…", systemImage: "square.and.arrow.down")
+                    Label("导入 Markdown / OPML / JSON…", systemImage: "square.and.arrow.down")
                 }
             } label: {
                 Image(systemName: "plus")
@@ -391,6 +392,10 @@ struct FolderRowView: View {
                 app.selectedFolderID = folder.id
                 app.createDocument(template: .blank)
             }
+            Button("在此新建 UML 时序图") {
+                app.selectedFolderID = folder.id
+                app.createDocument(template: .sequence)
+            }
             Button("新建子目录") {
                 if let id = app.createFolder(parentID: folder.id),
                    let child = app.folders.first(where: { $0.id == id }) {
@@ -461,7 +466,7 @@ struct DocumentTreeRow: View {
             }
 
             Menu("导出为") {
-                ForEach(ExportFormat.allCases) { format in
+                ForEach(ExportFormat.allCases.filter { !record.isSequence || $0.supportsSequence }) { format in
                     Button(format.title) {
                         app.export(document: record.id, format: format)
                     }
@@ -489,7 +494,7 @@ struct DocumentRow: View {
         HStack(spacing: 7) {
             Color.clear.frame(width: 10, height: 10)
 
-            Image(systemName: record.layout.symbol)
+            Image(systemName: record.isSequence ? MapTemplate.sequence.symbol : record.layout.symbol)
                 .font(.system(size: 13.5, weight: .medium))
                 .foregroundStyle(accent.opacity(0.88))
                 .frame(width: 18, height: 18)
@@ -505,10 +510,16 @@ struct DocumentRow: View {
                             .foregroundStyle(Color(nsColor: NSColor(hex: "#E6B450")))
                     }
                 }
-                Text("\(record.nodeCount) 个节点 · \(RelativeDate.short(record.updatedAt))")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                Group {
+                    if record.isSequence {
+                        Text("UML 时序图 · \(RelativeDate.short(record.updatedAt))")
+                    } else {
+                        Text("\(record.nodeCount) 个节点 · \(RelativeDate.short(record.updatedAt))")
+                    }
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
 
             Spacer(minLength: 0)
@@ -568,7 +579,7 @@ struct TrashView: View {
                 List {
                     ForEach(app.trashDocuments) { record in
                         HStack(spacing: 10) {
-                            Image(systemName: record.layout.symbol)
+                            Image(systemName: record.isSequence ? MapTemplate.sequence.symbol : record.layout.symbol)
                                 .foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(record.title)
